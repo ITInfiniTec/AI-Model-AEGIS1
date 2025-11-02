@@ -1,0 +1,98 @@
+// .vscode/tasks.json
+{
+"version": "2.0.0",
+"tasks": [
+// === Python Tasks ===
+{
+"label": "python: install requirements",
+"type": "shell",
+"command": "${command:python.interpreterPath}",
+"args": [
+"-m",
+"pip",
+"install",
+"-r",
+"requirements.txt"
+],
+"problemMatcher": [],
+"group": {
+"kind": "build",
+"isDefault": false
+},
+"presentation": {
+"reveal": "silent",
+"clear": true,
+"panel": "shared"
+},
+"detail": "Installs Python dependencies from requirements.txt using the selected interpreter."
+},
+
+// === C++ / CMake Tasks ===
+{
+"label": "cmake: configure C++",
+"type": "shell",
+"command": "cmake",
+"args": [
+"-S",
+"${workspaceFolder}/src/cpp",
+"-B",
+"${workspaceFolder}/build"
+// Add your CMake toolchain/generator arguments here if needed
+// e.g., "-G", "Ninja", "-DCMAKE_TOOLCHAIN_FILE=..."
+],
+"problemMatcher": [],
+"group": "build",
+"detail": "Configures the C++ project using CMake."
+},
+{
+"label": "cmake: build C++",
+"type": "shell",
+"command": "cmake",
+"args": [
+"--build",
+"${workspaceFolder}/build"
+],
+"problemMatcher": [
+"$gcc"
+],
+"group": {
+"kind": "build",
+"isDefault": true
+},
+"dependsOn": [
+"cmake: configure C++" // Ensure project is configured before building
+],
+"detail": "Builds the C++ executable using the configured CMake project."
+},
+
+// === Docker Tasks ===
+{
+"label": "docker-build",
+"type": "docker-build",
+"dockerBuild": {
+"dockerfile": "${workspaceFolder}/Dockerfile",
+"context": "${workspaceFolder}",
+"tag": "aegis-tpce-ai:latest"
+},
+"platform": "python", // Hint for the Docker extension
+"group": "build",
+"detail": "Builds the Docker image for the TPCE inference service."
+},
+
+// === Composite / Deployment Tasks ===
+{
+"label": "cmake: build C++ and deploy",
+"dependsOn": [
+"cmake: build C++" // First, build the C++ code
+],
+"dependsOrder": "sequence",
+// This is a placeholder for your actual deployment script.
+// You would replace the 'echo' command with 'scp', 'rsync', etc.
+"type": "shell",
+"command": "echo 'Deploying C++ binary to remote host...' && scp ${workspaceFolder}/build/src/cpp/main user@remote-aegis-dev-server:/path/to/remote/build/src/cpp/",
+"problemMatcher": [],
+"group": "build",
+"detail": "Builds the C++ project and then deploys the binary to a remote server."
+}
+]
+}

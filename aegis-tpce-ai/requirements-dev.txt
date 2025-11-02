@@ -1,0 +1,18 @@
+# This file specifies development, testing, and linting dependencies.
+# It should be installed in a development environment after the base requirements.
+# Install with: pip install -r requirements-dev.txt
+
+# === Include Runtime Dependencies ===
+# Ensures the development environment has all the packages of the runtime environment.
+-r requirements.txt
+
+# === Testing Framework ===
+pytest==7.4.2
+
+# === Linting & Formatting ===
+pylint==2.17.5
+black==24.8.0
+isort==5.12.0
+
+# === Static Analysis ===
+mypy==1.8.1
