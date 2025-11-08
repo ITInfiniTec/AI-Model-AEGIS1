@@ -6,6 +6,7 @@ from data_structures import Blueprint
 from cmep import cmep
 from cognitive_fallacy_library import cognitive_fallacy_library, CognitiveFallacyLibrary
 from diagnostic_reporter import DiagnosticReporter
+from prometheus_iop import prometheus_iop
 
 class UniversalCompiler:
     def __init__(self):
@@ -33,6 +34,13 @@ class UniversalCompiler:
             operations.append("OP_FETCH_KNOWLEDGE(topic='ai_ml')")
         if any(creative_tag in tag_values for creative_tag in ['poem', 'story', 'imagine', 'create']):
             operations.append("OP_CREATIVE_WRITING")
+        
+        # --- Project CHRONOS: New Tag Recognition ---
+        if any(tag.get("type") == "MODEL_PROTOCOL" and tag.get("value") == "PREDICTIVE_MODEL: REQUIRED" for tag in tags):
+            operations.append("OP_FETCH_TIME_SERIES_DATA")
+            operations.append("OP_ANALYZE_SERIES(model='ARIMA_SIM')")
+            operations.append("OP_GENERATE_FORECAST")
+
         if not operations:
             operations.append("OP_GENERAL_QUERY")
         
@@ -58,6 +66,16 @@ class TaskDecompositionEngine:
             elif op in ["OP_TEXT_SUMMARIZE", "OP_GENERATE_STRATEGIC_FRAMEWORK"]:
                 # These operations depend on having knowledge first.
                 stg[task_id] = {"operation": op, "depends_on": knowledge_tasks}
+            elif op.startswith("OP_FETCH_TIME_SERIES_DATA"):
+                stg[task_id] = {"operation": op, "depends_on": [], "on_failure": f"LOG_ERROR_AND_HALT({task_id})"}
+                knowledge_tasks.append(task_id) # Treat data fetch as a critical knowledge task
+            elif op.startswith("OP_ANALYZE_SERIES"):
+                fetch_task = next((tid for tid, details in stg.items() if details["operation"] == "OP_FETCH_TIME_SERIES_DATA"), None)
+                stg[task_id] = {"operation": op, "depends_on": [fetch_task] if fetch_task else []}
+            elif op == "OP_GENERATE_FORECAST":
+                # Forecasting depends on analysis.
+                analysis_task = next((tid for tid, details in stg.items() if details["operation"].startswith("OP_ANALYZE_SERIES")), None)
+                stg[task_id] = {"operation": op, "depends_on": [analysis_task] if analysis_task else []}
             else:
                 stg[task_id] = {"operation": op, "depends_on": []}
             task_counter += 1
@@ -72,6 +90,19 @@ class TaskDecompositionEngine:
             fallacy_str = ", ".join(fallacies)
             fallacy_warnings = f"\nWARNING: FALLACY_DETECTED({fallacy_str}). Proceeding with caution."
 
+        # --- Project PROMETHEUS: Simulating I/O Execution for Forecasting ---
+        time_series_data = None
+        forecast = 'No Time Series Data Analyzed'
+        
+        if "OP_FETCH_TIME_SERIES_DATA" in operations:
+            # Simulate fetching a specific series based on the intent
+            series_id = "NETWORK_TRAFFIC_TRENDS"
+            time_series_data = prometheus_iop.fetch_time_series_data(series_id)
+            
+            if "OP_GENERATE_FORECAST" in operations and time_series_data and time_series_data.data_points:
+                last_value = time_series_data.data_points[-1][1]
+                forecast = f"High confidence forecast: Next value is projected to be {last_value * 1.05:.2f} (5% growth)."
+
         # --- Project ARTEMIS: Task Decomposition ---
         task_engine = TaskDecompositionEngine()
         stg = task_engine.generate_stg(operations)
@@ -82,7 +113,7 @@ class TaskDecompositionEngine:
         audience_constraint = next((c.split('(')[1].strip(')') for c in constraints if c.startswith("AUDIENCE")), "GENERAL_USER")
 
         # --- CASSANDRA Tag Processing for QVC Execution ---
-        tags = {t['value'] for t in operations} # Check against operations, which are derived from tags
+        tags = {t['value'] for t in blueprint.tags}
         external_data_required = "YES" if "REQUIRE_EXTERNAL_DATA" in tags else "NO"
         safety_priority = "HIGH" if "SAFETY_PRIORITY" in tags else "STANDARD"
         ethical_consult_required = "YES" if "ETHICAL_CONSULT" in tags else "NO"
@@ -98,6 +129,7 @@ EXTERNAL_DATA_REQUIRED: {external_data_required}
 SAFETY_PRIORITY_LEVEL: {safety_priority}
 ETHICAL_CONSULTATION: {ethical_consult_required}
 
+SIMULATED_FORECAST_RESULT: {forecast}
 SEQUENTIAL_TASK_GRAPH:
 {stg_str}
 
@@ -118,7 +150,7 @@ SEQUENTIAL_TASK_GRAPH:
         operations = self._translate_tags_to_operations(blueprint.tags, blueprint.latent_intent)
 
         # Tier 3: Operation-to-Execution Translation (pass full blueprint for tag access)
-        execution_plan = self._translate_operations_to_execution(blueprint.primary_intent, operations, blueprint.constraints, detected_fallacies)
+        execution_plan = self._translate_operations_to_execution(blueprint.primary_intent, operations, blueprint.constraints, detected_fallacies, blueprint)
 
         # The compiler's sole job is to produce the execution plan.
         return execution_plan
@@ -224,7 +256,7 @@ class PraxisTriad:
         execution_plan = self.universal_compiler._translate_operations_to_execution(
             blueprint.primary_intent,
             self.universal_compiler._translate_tags_to_operations(blueprint.tags, blueprint.latent_intent),
-            blueprint.constraints,
+            blueprint.constraints, blueprint.primary_intent, blueprint
             cognitive_fallacy_library.check_for_fallacies(blueprint.primary_intent)
         )
 

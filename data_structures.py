@@ -1,7 +1,7 @@
 ```python
 # data_structures.py
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 from datetime import datetime
 
 # Define the structure for Math Language Tags
@@ -76,6 +76,18 @@ class MemoryNode:
         self.keywords = keywords
         self.performance_score = performance_score
         self.packet_reference = packet_reference
+
+# Define the structure for time-series data (Project CHRONOS)
+class TimeDataSeries:
+    """
+    A structured container for sequential, time-series data, used for
+    predictive modeling and trend analysis by Project CHRONOS.
+    """
+    def __init__(self, series_id: str, data_points: List[Tuple[datetime, float]], metadata: Dict[str, Any] = None):
+        self.series_id = series_id
+        # Data points are stored as (timestamp, value) tuples.
+        self.data_points = data_points 
+        self.metadata = metadata if metadata is not None else {}
 
 
 ```

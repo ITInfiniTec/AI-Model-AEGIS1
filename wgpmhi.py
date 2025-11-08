@@ -5,20 +5,31 @@ import re
 from data_structures import Blueprint, UserProfile, CognitivePacket, MemoryNode
 from cognitive_fallacy_library import cognitive_fallacy_library
 from datetime import datetime, timedelta
+from typing import List, Dict, Any, Optional
 from cmep import cmep
 from noesis_triad import NoesisTriad
+from config import MEMORY_DECAY_TAU, MEMORY_RETRIEVAL_LIMIT, set_memory_decay_tau, set_memory_retrieval_limit
 
 class WadeGeminiProtocol:
     def __init__(self):
         pass
 
-    def _trigger_antifragility_protocol(self, test_name: str, failure_reason: str, user_id: str, noesis_triad: NoesisTriad):
+    def _trigger_antifragility_protocol(self, test_name: str, failure_reason: str, user_id: str, noesis_triad: NoesisTriad) -> Optional[str]:
         """
-        Simulates the anti-fragility process by logging a failure as a learning opportunity
-        in the system's long-term memory.
+        Project NEMESIS: Adjusts system parameters based on critical test failures,
+        making the system anti-fragile by learning from stress.
         """
         learning_summary = f"ANTI-FRAGILITY_LEARNING: Test '{test_name}' failed. Reason: '{failure_reason}'. Corrective action required. Priority: High."
         noesis_triad.context_synthesizer.update_long_term_memory(user_id, learning_summary)
+
+        # Self-Healing Logic
+        if test_name == "memory_retrieval_weight_check":
+            old_tau = MEMORY_DECAY_TAU
+            new_tau = old_tau * 1.2  # Increase TAU by 20% to make memories decay slower.
+            set_memory_decay_tau(new_tau)
+            return f"PROTOCOL ACTIVE: Adjusted MEMORY_DECAY_TAU from {old_tau:.2f} to {new_tau:.2f} due to Memory Retrieval Failure."
+        
+        return None # No automated action taken for this failure type
 
     def run_pre_compilation_audit(self, blueprint: Blueprint, execution_plan: str) -> List[str]:
         """
@@ -104,11 +115,26 @@ class WadeGeminiProtocol:
             self_correction_audit_check = "Pass: Correctly identified no fallacies."
 
         # Memory Continuity: Check if long-term memory influenced the blueprint tags.
-        memory_continuity_check = "Fail: Memory keyword not found in tags."
-        # This test assumes a keyword ('quantum') was pre-populated in memory for the test run.
-        blueprint_tags = {tag['value'] for tag in blueprint.tags}
-        if 'quantum' in blueprint_tags:
-            memory_continuity_check = "Pass"
+        memory_continuity_check = "N/A (No prior memory to test)"
+        memory_nodes = noesis_triad.context_synthesizer.long_term_memory.get(user_profile.user_id, [])
+        if memory_nodes:
+            # Extract all keywords from past interactions
+            memory_keywords = set()
+            for node in memory_nodes:
+                memory_keywords.update(node.keywords)
+
+            # Find keywords that are in memory but NOT in the current prompt
+            prompt_keywords = {tag['value'] for tag in noesis_triad.strategic_heuristics._generate_tags(blueprint.primary_intent)}
+            continuity_candidates = memory_keywords - prompt_keywords
+
+            if not continuity_candidates:
+                memory_continuity_check = "Skipped (No unique memory keywords to verify)"
+            else:
+                blueprint_tags = {tag['value'] for tag in blueprint.tags}
+                if any(candidate in blueprint_tags for candidate in continuity_candidates):
+                    memory_continuity_check = "Pass"
+                else:
+                    memory_continuity_check = "Fail: No unique keywords from memory were found in the current blueprint's tags."
 
         # Hallucination Ratio: Check if the prose output reflects the topics from the execution plan.
         hallucination_ratio_check = "N/A"
@@ -297,6 +323,32 @@ class WadeGeminiProtocol:
         else:
             stg_dependency_check = "Fail: SEQUENTIAL_TASK_GRAPH not found in output."
 
+        # --- NEW TEST: Predictive Workflow Check (Project CHRONOS Audit) ---
+        predictive_workflow_check = "N/A"
+        is_predictive_request = any(tag.get("value") == "PREDICTIVE_MODEL: REQUIRED" for tag in blueprint.tags)
+
+        if is_predictive_request:
+            predictive_workflow_check = "Pass" # Default to Pass
+            stg_match = re.search(r"SEQUENTIAL_TASK_GRAPH:\n(.*?)\n-- END QVC --", output, re.DOTALL)
+            if stg_match:
+                stg_str = stg_match.group(1)
+                
+                # Find task IDs for each operation in the CHRONOS pipeline
+                fetch_task = re.search(r"(TASK_\d+): {'operation': 'OP_FETCH_TIME_SERIES_DATA'", stg_str)
+                analyze_task = re.search(r"(TASK_\d+): {'operation': 'OP_ANALYZE_SERIES\(model='ARIMA_SIM'\)'.*?'depends_on': \['(.*?)'\]}", stg_str)
+                forecast_task = re.search(r"(TASK_\d+): {'operation': 'OP_GENERATE_FORECAST'.*?'depends_on': \['(.*?)'\]}", stg_str)
+
+                if not (fetch_task and analyze_task and forecast_task):
+                    predictive_workflow_check = "Fail: One or more required predictive operations (FETCH, ANALYZE, FORECAST) are missing from the STG."
+                else:
+                    # Verify dependencies
+                    if analyze_task.group(2).strip("'\"") != fetch_task.group(1):
+                        predictive_workflow_check = "Fail: ANALYZE task does not correctly depend on the FETCH task."
+                    elif forecast_task.group(2).strip("'\"") != analyze_task.group(1).strip("'\""):
+                        predictive_workflow_check = "Fail: FORECAST task does not correctly depend on the ANALYZE task."
+            else:
+                predictive_workflow_check = "Fail: STG not found in output for a predictive request."
+
         results = {
             "cognitive_logic": cognitive_logic_check,
             "strategic_reasoning": strategic_reasoning_check,
@@ -315,12 +367,17 @@ class WadeGeminiProtocol:
             "memory_node_creation_check": memory_node_creation_check, # New Test Result
             "memory_retrieval_weight_check": memory_retrieval_weight_check,
             "stg_dependency_check": stg_dependency_check,
+            "predictive_workflow_check": predictive_workflow_check,
         }
-
+        
+        protocol_actions = []
         # Trigger Anti-Fragility Protocol for any failures
         for test, result in results.items():
             if "Fail" in str(result):
-                self._trigger_antifragility_protocol(test, result, user_profile.user_id, noesis_triad)
+                action_taken = self._trigger_antifragility_protocol(test, result, user_profile.user_id, noesis_triad)
+                if action_taken:
+                    protocol_actions.append(action_taken)
+        results["anti_fragility_protocol_status"] = protocol_actions if protocol_actions else "PROTOCOL INACTIVE"
 
         return results
 

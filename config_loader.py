@@ -40,5 +40,8 @@ class ConfigLoader:
     def get_ethical_protocol_config(self):
         return self._config.get("ethical_protocol", {})
 
+    def get_full_config(self):
+        return self._config
+
 # Singleton instance to be used across the application
 config_loader = ConfigLoader()

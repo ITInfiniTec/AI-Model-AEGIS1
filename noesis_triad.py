@@ -2,7 +2,6 @@
 # noesis_triad.py
 
 import re
-from datetime import datetime
 import uuid
 import math
 import numpy as np
@@ -11,6 +10,7 @@ from data_structures import Blueprint, UserProfile, CognitivePacket, MemoryNode
 from cmep import cmep
 from data_integrity_protocol import data_integrity_protocol
 from google_search_synthesizer import google_search_synthesizer, GoogleSearchSynthesizer
+from config import MEMORY_DECAY_TAU, MEMORY_RETRIEVAL_LIMIT
 
 class ContextSynthesizer:
     def __init__(self):
@@ -59,7 +59,7 @@ class ContextSynthesizer:
         
         # Time Decay: A simple exponential decay (tau = 7 days or 604800 seconds)
         # Recent memories are weighted higher.
-        tau = 604800.0 
+        tau = MEMORY_DECAY_TAU 
         time_decay_factor = math.exp(-time_elapsed / tau)
         
         # Performance Boost: Nodes with higher performance scores are weighted higher.
@@ -77,7 +77,8 @@ class ContextSynthesizer:
         if user_id not in self.long_term_memory or not self.long_term_memory[user_id]:
             return []
 
-        # --- SIMULATED SEMANTIC SEARCH (from Project MNEMOSYNE) ---
+        # --- SIMULATED SEMANTIC SEARCH ---
+        # 1. Simulate Prompt Vector (simplistic keyword hashing for simulation)
         prompt_vector = np.array([hash(word) % 100 for word in re.sub(r'[^\w\s]', '', prompt.lower()).split() if len(word) > 4][:3])
         if len(prompt_vector) < 3: prompt_vector = np.array([0.1, 0.2, 0.3]) # Default fallback
         
@@ -86,44 +87,24 @@ class ContextSynthesizer:
         for node in self.long_term_memory[user_id]:
             node_vector = np.array(node.core_intent_vector)
             
+            # 2. Simulated Similarity (Cosine Similarity placeholder)
             similarity_score = np.dot(prompt_vector, node_vector) / (np.linalg.norm(prompt_vector) * np.linalg.norm(node_vector)) if np.linalg.norm(prompt_vector) * np.linalg.norm(node_vector) != 0 else 0
 
+            # 3. Apply Weighting (Recency + Performance)
             weighted_score = similarity_score * self._calculate_weight(node)
             
             retrieval_scores.append((weighted_score, node))
 
+        # 4. Sort and Select Top N
         retrieval_scores.sort(key=lambda x: x[0], reverse=True)
-        top_nodes = [score[1] for score in retrieval_scores[:10]] # Retrieve top 10 relevant nodes
+        top_nodes = [score[1] for score in retrieval_scores[:MEMORY_RETRIEVAL_LIMIT]]
 
+        # 5. Extract Keywords
         keywords_list = []
         for node in top_nodes:
             keywords_list.extend(node.keywords)
             
         return list(set(keywords_list)) # Return de-duplicated keywords for ORION's novelty check
-
-    def _create_memory_node(self, packet: CognitivePacket) -> MemoryNode:
-        """Converts a CognitivePacket into a retrievable MemoryNode."""
-        perf_score = 0.5 # Neutral baseline
-        if packet.wgpmhi_results.get("cognitive_logic") == "Pass":
-            perf_score += 0.3
-        if packet.wgpmhi_results.get("risk_adjusted_planning_check") == "Pass":
-            perf_score += 0.2
-            
-        return MemoryNode(
-            node_id=packet.packet_id, # Use packet_id for node_id
-            timestamp=datetime.now(),
-            core_intent_vector=[0.1, 0.2, 0.3], # Placeholder Vector
-            keywords=packet.intent.get("math_language_tags", []),
-            performance_score=round(perf_score, 2),
-            packet_reference=packet,
-        )
-
-    def update_long_term_memory(self, user_id: str, packet: CognitivePacket):
-        """Stores a CognitivePacket as a MemoryNode for future retrieval."""
-        if user_id not in self.long_term_memory:
-            self.long_term_memory[user_id] = []
-        memory_node = self._create_memory_node(packet)
-        self.long_term_memory[user_id].append(memory_node)
 
 class StrategicHeuristics:
     def __init__(self):
@@ -220,6 +201,12 @@ class StrategicHeuristics:
         if novelty_score > 0.8:
             strategic_tags.append({"type": "CONTEXT_CONFIDENCE", "value": "LOW"})
             strategic_tags.append({"type": "RESOURCE_ALLOCATION", "value": "REQUIRE_EXTERNAL_DATA"})
+
+        # --- CHRONOS Heuristics: Predictive Modeling Detection ---
+        predictive_keywords = ["predict", "forecast", "trend", "time-series", "sequential data"]
+        if any(keyword in prompt.lower() for keyword in predictive_keywords):
+            if "PREDICTIVE_MODEL: REQUIRED" not in {t['value'] for t in strategic_tags}:
+                strategic_tags.append({"type": "MODEL_PROTOCOL", "value": "PREDICTIVE_MODEL: REQUIRED"})
 
         # --- Keyword Extraction ---
         # Combine strategic tags with keyword-based tags.
