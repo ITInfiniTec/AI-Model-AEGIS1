@@ -114,8 +114,8 @@ class CommandHandler:
         node = self.aegis_engine.get_memory_node(node_id)
         if node:
             print(f"\n--- DETAILS FOR MEMORY NODE: {node_id} ---")
-            # A more readable representation would be ideal here.
-            print(json.dumps(node.to_dict(), indent=4))
+            # Use model_dump_json for a direct, pretty-printed JSON output.
+            print(node.model_dump_json(indent=4))
         else:
             print(f"Memory Node with ID '{node_id}' not found in the current session.")
 
@@ -124,6 +124,8 @@ class CommandHandler:
         try:
             self.aegis_engine.save_memory_to_file('memory_log.json')
             print("Successfully saved long-term memory to 'memory_log.json'.")
+        except TypeError as e:
+            print(f"Error: Could not serialize memory to JSON. {e}")
         except Exception as e:
             print(f"An error occurred while saving memory: {e}")
 
@@ -134,6 +136,8 @@ class CommandHandler:
             print("Successfully loaded long-term memory from 'memory_log.json'.")
         except FileNotFoundError:
             print("Error: 'memory_log.json' not found.")
+        except json.JSONDecodeError:
+            print("Error: Could not decode 'memory_log.json'. The file may be corrupt or improperly formatted.")
         except Exception as e:
             print(f"An error occurred while loading memory: {e}")
 

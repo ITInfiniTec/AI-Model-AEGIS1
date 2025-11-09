@@ -132,6 +132,42 @@ class ContextSynthesizer:
             
         return list(set(keywords_list)) # Return de-duplicated keywords for ORION's novelty check
 
+    def _create_memory_node(self, cognitive_packet: CognitivePacket) -> MemoryNode:
+        """Creates a MemoryNode from a CognitivePacket, calculating performance."""
+        # 1. Calculate performance score based on WGPMHI audit results.
+        # A simple metric: ratio of 'Pass' results to total tests run.
+        pass_count = sum(1 for result in cognitive_packet.wgpmhi_results.values() if "Pass" in str(result))
+        total_tests = len(cognitive_packet.wgpmhi_results)
+        # Scale score between 0.5 (minimum viability) and 1.0 (perfect).
+        performance_score = 0.5 + (pass_count / total_tests) * 0.5 if total_tests > 0 else 0.5
+
+        # 2. Simulate a core intent vector from the primary intent.
+        primary_intent = cognitive_packet.intent.get("primary", "")
+        prompt_vector = np.array([hash(word) % 100 for word in re.sub(r'[^\w\s]', '', primary_intent.lower()).split() if len(word) > 4][:3])
+        if len(prompt_vector) < 3: prompt_vector = np.array([0.1, 0.2, 0.3])
+
+        # 3. Extract keywords.
+        keywords = [tag.value for tag in StrategicHeuristics()._generate_tags(primary_intent)]
+
+        # 4. Assemble and return the MemoryNode.
+        return MemoryNode(
+            node_id=f"mn-{uuid.uuid4()}",
+            timestamp=cognitive_packet.timestamp,
+            core_intent_vector=prompt_vector.tolist(),
+            keywords=keywords,
+            performance_score=round(performance_score, 4),
+            packet_reference=cognitive_packet
+        )
+
+    def update_long_term_memory(self, user_id: str, cognitive_packet: CognitivePacket):
+        """Creates a MemoryNode and adds it to the user's long-term memory."""
+        if user_id not in self.long_term_memory:
+            self.long_term_memory[user_id] = []
+
+        # Create a new memory node from the cognitive packet.
+        new_node = self._create_memory_node(cognitive_packet)
+        self.long_term_memory[user_id].append(new_node)
+
 class StrategicHeuristics:
     def __init__(self):
         pass
