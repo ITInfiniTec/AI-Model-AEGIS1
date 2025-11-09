@@ -50,6 +50,31 @@ class ContextSynthesizer:
         # Ensure the profile is valid before it's used by the system.
         return data_integrity_protocol.validate_user_profile(profile_to_validate)
 
+    def evaluate_context_risk(self, context: Dict[str, Any]) -> Dict[str, float]:
+        """
+        Project ORION: Evaluates the risk and novelty of the current context.
+        Returns a dictionary with 'risk_score' and 'novelty_score'.
+        """
+        prompt = context.get("prompt", "").lower()
+        long_term_memory = context.get("long_term_memory", [])
+
+        # 1. Risk Score Calculation
+        # Risk increases if the prompt touches on controversial topics.
+        risk_score = 0.1  # Base risk
+        if any(keyword in prompt for keyword in ["politics", "religion", "opinion", "geopolitical"]):
+            risk_score = 0.7
+
+        # 2. Novelty Score Calculation
+        # Novelty is high if there is no relevant long-term memory.
+        # A more sophisticated check would use semantic similarity scores.
+        if not long_term_memory:
+            novelty_score = 1.0
+        else:
+            # If there's memory, novelty is lower.
+            novelty_score = 0.3
+
+        return {"risk_score": risk_score, "novelty_score": novelty_score}
+
     def _calculate_weight(self, node: MemoryNode) -> float:
         """
         Applies a time-decay function and performance boost to a MemoryNode.
