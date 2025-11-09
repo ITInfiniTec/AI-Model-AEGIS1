@@ -8,7 +8,6 @@ from cognitive_packet_generator import cognitive_packet_generator
 from isp_protocol import isp
 from prometheus_iop import prometheus_iop
 from state_manager import state_manager
-from v_architect_sim import VArchitectSimulator
 import json
 from logger import log
 import sys
@@ -197,6 +196,7 @@ class CommandHandler:
 
     def run_stress_test(self, *args):
         """Runs the V-Architect integration stress test."""
+        from v_architect_sim import VArchitectSimulator
         print("Initiating V-Architect stress test from CLI...")
         simulator = VArchitectSimulator()
         simulator.run_stress_test()
