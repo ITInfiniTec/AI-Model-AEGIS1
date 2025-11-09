@@ -6,38 +6,42 @@ from data_structures import Blueprint, UserProfile, SemanticTag, ExecutionPlan
 from cmep import cmep
 from cognitive_fallacy_library import cognitive_fallacy_library
 from diagnostic_reporter import DiagnosticReporter
+from config_loader import config_loader
 from prometheus_iop import prometheus_iop
 
 class UniversalCompiler:
     def __init__(self):
-        pass
+        # Load the compiler rules from the central configuration.
+        self.rules = config_loader.get_compiler_rules()
 
     def _translate_tags_to_operations(self, tags: List[SemanticTag], latent_intent: str) -> List[str]:
-        """Tier 2 Simulation: Translates tags into a sequence of logical operations."""
+        """
+        Translates tags into a sequence of logical operations using a configurable rule-based engine.
+        This is more scalable and knowable than a hardcoded if/else block.
+        """
         operations = set()
         tag_values = {tag.value for tag in tags}
 
-        # Latent intent can add high-level operations.
-        if "strategic framework" in latent_intent:
-            operations.add("OP_GENERATE_STRATEGIC_FRAMEWORK")
+        for rule in self.rules:
+            conditions = rule.get("conditions", {})
+            
+            # Condition: Check if any of a list of tag values are present.
+            if "tags_include_any" in conditions and not any(tag in tag_values for tag in conditions["tags_include_any"]):
+                continue
 
-        # Add operations based on keyword tags.
-        if 'summarize' in tag_values:
-            # Add summarize only if a more specific generation task isn't already present.
-            if "OP_GENERATE_STRATEGIC_FRAMEWORK" not in operations and "OP_CREATIVE_WRITING" not in operations:
-                operations.add("OP_TEXT_SUMMARIZE")
-        if 'quantum' in tag_values or 'physics' in tag_values:
-            operations.add("OP_FETCH_KNOWLEDGE(topic='quantum_physics')")
-        if 'blockchain' in tag_values:
-            operations.add("OP_FETCH_KNOWLEDGE(topic='blockchain')")
-        if any(ai_tag in tag_values for ai_tag in ['ai', 'ml', 'ann', 'gnn']):
-            operations.add("OP_FETCH_KNOWLEDGE(topic='ai_ml')")
-        if any(creative_tag in tag_values for creative_tag in ['poem', 'story', 'imagine', 'create']):
-            operations.add("OP_CREATIVE_WRITING")
-        
-        # --- Project CHRONOS: New Tag Recognition ---
-        if any(tag.type == "MODEL_PROTOCOL" and tag.value == "PREDICTIVE_MODEL: REQUIRED" for tag in tags):
-            operations.update(["OP_FETCH_TIME_SERIES_DATA", "OP_ANALYZE_SERIES(model='ARIMA_SIM')", "OP_GENERATE_FORECAST"])
+            # Condition: Check for a specific latent intent string.
+            if "latent_intent_is" in conditions and latent_intent != conditions["latent_intent_is"]:
+                continue
+
+            # Condition: Check for a specific tag with a given type and value.
+            if "tag_is" in conditions:
+                required_tag = conditions["tag_is"]
+                if not any(tag.type == required_tag.get("type") and tag.value == required_tag.get("value") for tag in tags):
+                    continue
+
+            # If all conditions passed, add the operation(s).
+            if "operation" in rule: operations.add(rule["operation"])
+            if "operations" in rule: operations.update(rule["operations"])
 
         if not operations:
             operations.add("OP_GENERAL_QUERY")
@@ -69,6 +73,13 @@ class UniversalCompiler:
         # --- Constraint Processing for QVC Execution ---
         format_constraint = next((c.split('(')[1].strip(')') for c in constraints if c.startswith("FORMAT")), "TEXT_BLOCK")
         audience_constraint = next((c.split('(')[1].strip(')') for c in constraints if c.startswith("AUDIENCE")), "GENERAL_USER")
+        word_limit_constraint = next((c for c in constraints if c.startswith("word_limit:")), None)
+        word_limit = None
+        if word_limit_constraint:
+            try:
+                word_limit = int(word_limit_constraint.split(":")[1].strip())
+            except (ValueError, IndexError):
+                word_limit = None # Ignore malformed constraint
 
         # --- CASSANDRA Tag Processing for QVC Execution ---
         tag_values = {t.value for t in blueprint.tags}
@@ -79,6 +90,7 @@ class UniversalCompiler:
             target_format=format_constraint,
             target_audience=audience_constraint,
             fallacy_warnings=fallacies,
+            word_limit=word_limit,
             external_data_required="REQUIRE_EXTERNAL_DATA" in tag_values,
             safety_priority="HIGH" if "SAFETY_PRIORITY" in tag_values else "STANDARD",
             ethical_consult_required="ETHICAL_CONSULT" in tag_values,
@@ -96,59 +108,59 @@ class UniversalCompiler:
 
 class TaskDecompositionEngine:
     """Analyzes operations to generate a Sequential Task Graph (STG)."""
+    def __init__(self):
+        # Load dependency rules from the central configuration.
+        rules = config_loader.get_stg_dependency_rules()
+        self.op_types = rules.get("operation_types", {})
+        self.dependencies = rules.get("dependencies", {})
+
+    def _get_op_type(self, operation: str) -> str | None:
+        """Helper to find the type of a given operation string."""
+        for op_type, op_list in self.op_types.items():
+            if any(op_name in operation for op_name in op_list):
+                return op_type
+        return None
+
     def generate_stg(self, operations: List[str]) -> Dict[str, Dict[str, Any]]:
         """
-        Generates a Sequential Task Graph from a list of operations.
-        This is a simulation of dependency analysis.
+        Generates a Sequential Task Graph from a list of operations using a
+        configurable, rule-based dependency engine.
         """
         stg = {}
-        task_counter = 1
-        knowledge_tasks = []
+        tasks_by_type: Dict[str, List[str]] = {op_type: [] for op_type in self.op_types}
 
-        for op in operations:
-            task_id = f"TASK_{task_counter}"
-            if op.startswith("OP_FETCH_KNOWLEDGE"):
-                # Critical tasks now have a conditional failure path
-                stg[task_id] = {"operation": op, "depends_on": [], "on_failure": f"LOG_ERROR_AND_HALT({task_id})"}
-                knowledge_tasks.append(task_id)
-            elif op in ["OP_TEXT_SUMMARIZE", "OP_GENERATE_STRATEGIC_FRAMEWORK"]:
-                # These operations depend on having knowledge first.
-                stg[task_id] = {"operation": op, "depends_on": knowledge_tasks}
-            elif op.startswith("OP_FETCH_TIME_SERIES_DATA"):
-                stg[task_id] = {"operation": op, "depends_on": [], "on_failure": f"LOG_ERROR_AND_HALT({task_id})"}
-                knowledge_tasks.append(task_id) # Treat data fetch as a critical knowledge task
-            elif op.startswith("OP_ANALYZE_SERIES"):
-                fetch_task = next((tid for tid, details in stg.items() if details["operation"] == "OP_FETCH_TIME_SERIES_DATA"), None)
-                stg[task_id] = {"operation": op, "depends_on": [fetch_task] if fetch_task else []}
-            elif op == "OP_GENERATE_FORECAST": # type: ignore
-                # Forecasting depends on analysis.
-                analysis_task = next((tid for tid, details in stg.items() if details["operation"].startswith("OP_ANALYZE_SERIES")), None)
-                stg[task_id] = {"operation": op, "depends_on": [analysis_task] if analysis_task else []}
-            else:
-                stg[task_id] = {"operation": op, "depends_on": []}
-            task_counter += 1
+        # First pass: Create all tasks and categorize them by type.
+        for i, op in enumerate(operations):
+            task_id = f"TASK_{i+1}"
+            op_type = self._get_op_type(op)
+            stg[task_id] = {"operation": op, "depends_on": []}
+            if op_type:
+                tasks_by_type[op_type].append(task_id)
+            # Add failure paths for critical fetch operations.
+            if op_type == "knowledge_fetch":
+                stg[task_id]["on_failure"] = f"LOG_ERROR_AND_HALT({task_id})"
+
+        # Second pass: Wire dependencies based on the rules.
+        for task_id, details in stg.items():
+            op_type = self._get_op_type(details["operation"])
+            if op_type and op_type in self.dependencies:
+                for required_dependency_type in self.dependencies[op_type]:
+                    details["depends_on"].extend(tasks_by_type.get(required_dependency_type, []))
+
         return stg
 
 class ResponseOrchestrator:
     """Applies final formatting, constraints, and confidence layers to the output."""
     def __init__(self):
         # Project CHIRON: A dictionary of analogies to connect topics to user passions.
-        self.passion_analogies = {
-            "blockchain": {
-                "chess": "Think of blockchain as a grandmaster's logbook, where every move (transaction) is recorded immutably for all to see, creating a perfect, verifiable history of the game.",
-                "poker": "Blockchain is like having a transparent dealer where every card dealt is cryptographically signed and visible to the table, eliminating any possibility of cheating.",
-                "war tactics": "Consider blockchain a decentralized command ledger; orders are distributed across all units simultaneously, making them tamper-proof and ensuring a single source of truth on the battlefield.",
-            },
-            "ai_ml": {
-                "chess": "AI in chess is like a player who has studied every grandmaster game ever played, recognizing patterns and predicting outcomes with superhuman accuracy.",
-                "poker": "An AI in poker doesn't just play the odds; it analyzes betting patterns and player tells over millions of hands to exploit even the most subtle weaknesses.",
-                "war tactics": "AI in warfare acts as a supreme strategist, running millions of battle simulations in seconds to identify the optimal plan of attack with the highest probability of success.",
-            },
-            "quantum_physics": {
-                "chess": "Quantum mechanics is like a chessboard where a piece can be on multiple squares at once (superposition) until it's observed (measured), at which point its position becomes certain.",
-                "poker": "A quantum state is like an undealt card in a deck—it has the potential to be any card, and only by observing it do you collapse that potential into a single, definite value.",
-            }
-        }
+        self.persona_interface = PersonaInterface()
+        # Load conversational configurations once during initialization.
+        self.conv_config = config_loader.get_conversational_config()
+        self.greetings = set(self.conv_config.get("greetings", []))
+        self.short_interactions = self.conv_config.get("short_interactions", {})
+        self.passion_analogies = config_loader.get_passion_analogies()
+        self.analogy_fallback = self.passion_analogies.pop("fallback_template", "The topic of {topic} is complex.")
+        self.op_topic_mapping = config_loader.get_operation_topic_mapping()
 
     def _generate_persona_driven_prose(self, user_profile: UserProfile, operations: List[str], prompt: str) -> str:
         """Generates simulated prose using analogies based on user passions."""
@@ -158,22 +170,28 @@ class ResponseOrchestrator:
 
         # --- Conversational Reply Mapping ---
         # Handle common, short interactions with appropriate, direct replies.
-        short_interactions = {
-            "thanks": "You're welcome!",
-            "thank you": "You're welcome! Is there anything else I can help with?",
-            "ok": "Acknowledged.",
-            "cool": "Glad you think so!",
-            "good job": "Thank you. I strive to be effective.",
-        }
-        if lower_prompt in short_interactions:
-            return short_interactions[lower_prompt]
+        if lower_prompt in self.short_interactions:
+            return self.short_interactions[lower_prompt]
 
-        # If the only operation is a general query, provide a more direct, conversational response.
+        # If it's a general query, check if it's a recognized greeting.
         if len(operations) == 1 and operations[0] == "OP_GENERAL_QUERY":
-            return "Hello! How can I assist you today?"
+            if lower_prompt in self.greetings:
+                return self.conv_config.get("greeting_response", "Hello.")
+            else:
+                # For other general queries, provide a neutral analysis summary.
+                return self.conv_config.get("neutral_query_response", "Query analyzed.")
 
-        # Map operations to topics more robustly
-        topics_in_plan = {op.split("'")[1] for op in operations if op.startswith("OP_FETCH_KNOWLEDGE")}
+        # Map all operations to topics more robustly using the configuration.
+        topics_in_plan = set()
+        for op in operations:
+            for op_name, topics in self.op_topic_mapping.items():
+                if op.startswith(op_name):
+                    if topics == "extract_from_op":
+                        match = re.search(r"\('([^']*)'\)", op)
+                        if match: topics_in_plan.add(match.group(1))
+                    else:
+                        topics_in_plan.update(topics)
+                    break
 
         for topic in sorted(list(topics_in_plan)): # Sort for consistent output
             analogy_found = False
@@ -184,7 +202,7 @@ class ResponseOrchestrator:
                     break  # Use the first matching passion-analogy
             if not analogy_found:
                 # Provide a generic fallback if no specific analogy is found for the topic
-                prose_segments.append(f"The topic of {topic.replace('_', ' ')} is a complex field with many nuances.")
+                prose_segments.append(self.analogy_fallback.format(topic=topic.replace('_', ' ')))
 
         return " ".join(prose_segments)
 
@@ -238,46 +256,48 @@ SEQUENTIAL_TASK_GRAPH:
         operations = [details['operation'] for details in execution_plan.stg.values()]
         prose_output = self._generate_persona_driven_prose(user_profile, operations, blueprint.primary_intent)
 
-        # Assemble the final output string
-        final_output = f"{plan_str.strip()}\n\n--- SIMULATED PROSE OUTPUT ---\n{confidence_statement}{tone_header}{output_header}{format_tag}{prose_output}"
+        # --- Intelligent Persona Application ---
+        # Check if the prose is a simple conversational reply. If so, return it directly.
+        # Otherwise, wrap it in the full persona.
+        if self.persona_interface.is_conversational(prose_output):
+            return prose_output
+        else:
+            # Assemble the final output string
+            final_output = f"{plan_str.strip()}\n\n--- SIMULATED PROSE OUTPUT ---\n{confidence_statement}{tone_header}{output_header}{format_tag}{prose_output}"
 
-        # Apply word limit constraint
-        for constraint in constraints:
-            if constraint.startswith("word_limit:"):
-                limit = int(constraint.split(":")[1].strip())
+            # Apply word limit constraint
+            if execution_plan.word_limit is not None:
                 words = final_output.split()
-                if len(words) > limit:
-                    final_output = " ".join(words[:limit]) + "..."
-        return final_output
+                if len(words) > execution_plan.word_limit:
+                    final_output = " ".join(words[:execution_plan.word_limit]) + "..."
+            return self.persona_interface.apply_persona(final_output, blueprint.persona)
 
 class PersonaInterface:
     def __init__(self):
-        pass
+        # Load all possible conversational replies for efficient checking.
+        self.conversational_replies = config_loader.get_conversational_config().get("all_replies", [])
+        # Load all persona definitions from the central configuration.
+        self.personas = config_loader.get_personas_config()
 
     def apply_persona(self, text: str, persona: str) -> str:
         """
         Applies a persona to the generated text. This simulates the style-transfer model
         described in the Cognitive Weave Architecture. It now intelligently avoids
-        wrapping simple, conversational replies.
+        wrapping simple, conversational replies and uses a data-driven persona definition.
         """
-        if persona == "The_Architect":
-            # Define simple replies that should not be wrapped in the formal persona.
-            conversational_replies = [
-                "Hello! How can I assist you today?",
-                "You're welcome!",
-                "You're welcome! Is there anything else I can help with?",
-                "Acknowledged.",
-                "Glad you think so!",
-                "Thank you. I strive to be effective.",
-            ]
-            # Avoid wrapping audit failures or simple conversational replies.
-            if "[AUDIT_FAIL]" in text or text in conversational_replies:
-                return text
+        persona_config = self.personas.get(persona)
+        if persona_config:
+            if "[AUDIT_FAIL]" in text: return text # Avoid wrapping audit failures.
 
-            header = "⚜️ **ARCHITECT'S LOG:**\n\n"
-            footer = "\n\n--- END OF TRANSMISSION ---"
+            header = persona_config.get("header", "")
+            footer = persona_config.get("footer", "")
             return f"{header}{text}{footer}"
         return text
+
+    def is_conversational(self, text: str) -> bool:
+        """Checks if a given text is a known simple conversational reply."""
+        return text in self.conversational_replies
+
 
 class PraxisTriad:
     def __init__(self):
@@ -326,7 +346,7 @@ class PraxisTriad:
             
         final_compiled_output = self.response_orchestrator.orchestrate_response(execution_plan, blueprint, user_profile)
         audited_output = cmep.post_generation_audit(blueprint.primary_intent, final_compiled_output)
-        final_output = self.persona_interface.apply_persona(audited_output, blueprint.persona)
+        final_output = audited_output # Persona is now applied inside the orchestrator
 
         # Return both the final output and the debug report.
         return {

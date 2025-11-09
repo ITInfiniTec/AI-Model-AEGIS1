@@ -14,6 +14,7 @@ from google_search_synthesizer import google_search_synthesizer, GoogleSearchSyn
 from state_manager import state_manager
 from semantic_embedding_model import embedding_model
 from logger import log
+from config_loader import config_loader
 from config import MEMORY_DECAY_TAU, MEMORY_RETRIEVAL_LIMIT
 
 class ContextSynthesizer:
@@ -22,6 +23,13 @@ class ContextSynthesizer:
         # They are populated from the StateManager when a user is first encountered.
         self.user_profiles: Dict[str, UserProfile] = {}
         self.long_term_memory: Dict[str, List[MemoryNode]] = {}
+        # Load risk assessment parameters from the central configuration.
+        risk_config = config_loader.get_risk_assessment_config()
+        self.base_risk = risk_config.get("base_risk_score", 0.1)
+        self.risk_scaler = risk_config.get("risk_scaling_factor", 0.9)
+        # Load memory weighting parameters from the central configuration.
+        weight_config = config_loader.get_memory_weighting_config()
+        self.perf_boost_factor = weight_config.get("performance_boost_factor", 2.0)
 
     def build_context(self, user_id: str, prompt: str) -> Dict[str, str]:
         """Builds a context dictionary based on the user ID and prompt."""
@@ -71,7 +79,7 @@ class ContextSynthesizer:
         prompt_embedding = embedding_model.get_embedding(prompt)
         # The risk score is the normalized value of the risk dimension.
         # We add a small base risk and scale it.
-        risk_score = 0.1 + (prompt_embedding[2] * 0.9)
+        risk_score = self.base_risk + (prompt_embedding[2] * self.risk_scaler)
 
         # 2. Novelty Score Calculation (Data-Driven)
         # Novelty is inversely proportional to the highest similarity score found in memory.
@@ -99,7 +107,7 @@ class ContextSynthesizer:
         
         # Performance Boost: Nodes with higher performance scores are weighted higher.
         # Score is already scaled from 0.5 to 1.0. We use a linear boost.
-        performance_boost_factor = node.performance_score * 2.0 # Scales boost from 1.0 to 2.0
+        performance_boost_factor = node.performance_score * self.perf_boost_factor
 
         # The final weight is a product of the decay and the performance factor.
         return time_decay_factor * performance_boost_factor
@@ -190,7 +198,23 @@ class ContextSynthesizer:
 
 class StrategicHeuristics:
     def __init__(self):
-        pass
+        # Load ambiguity rules from the central configuration.
+        self.ambiguity_rules = config_loader.get_ambiguity_rules()
+        # Load outcome detection rules from the central configuration.
+        self.outcome_rules = config_loader.get_outcome_rules()
+        # Load constraint detection rules from the central configuration.
+        self.constraint_rules = config_loader.get_constraint_rules()
+        # Load latent intent rules from the central configuration.
+        self.latent_intent_rules = config_loader.get_latent_intent_rules()
+        # Load integrity check parameters from the central configuration.
+        integrity_config = config_loader.get_integrity_checks_config()
+        self.comprehensive_threshold = integrity_config.get("comprehensive_word_limit_threshold", 150)
+        self.comprehensive_keywords = integrity_config.get("comprehensive_intent_keywords", [])
+        # Load tag generation parameters from the central configuration.
+        tag_gen_config = config_loader.get_tag_generation_config()
+        self.acronyms = set(tag_gen_config.get("acronyms", []))
+        self.predictive_keywords = tag_gen_config.get("predictive_keywords", [])
+        self.pos_vocabulary = tag_gen_config.get("pos_vocabulary", {})
 
     def sense_the_landscape(self, prompt: str) -> Dict:
         """S¹ - Implements the Initial Recon phase of the Architect's Framework."""
@@ -198,12 +222,14 @@ class StrategicHeuristics:
         tags = self._generate_tags(prompt)
         constraints = self._generate_constraints(prompt)
         expected_outcome = self._generate_expected_outcome(prompt)
+        lower_prompt = prompt.lower()
 
         # Implicit & Ambiguity Analysis
-        ambiguous_terms = [term for term in ["simple", "best", "fast"] if term in prompt.lower()]
-        contradictions = []
-        if "brief" in prompt.lower() and "comprehensive" in prompt.lower():
-            contradictions.append("Prompt asks for both brevity and comprehensiveness.")
+        ambiguous_terms = [rule["term"] for rule in self.ambiguity_rules.get("ambiguous_terms", []) if rule["term"] in lower_prompt]
+        contradictions = [
+            f"Contradiction between: {', '.join(rule['terms'])}" for rule in self.ambiguity_rules.get("contradictions", [])
+            if all(term in lower_prompt for term in rule["terms"])
+        ]
 
         return {
             "tags": tags,
@@ -220,29 +246,31 @@ class StrategicHeuristics:
         Performs cross-field consistency checks on the blueprint to detect logical contradictions.
         This method now also resolves identified ambiguities from the sense-making phase.
         """
-        # --- Ambiguity Resolution ---
+        # --- Ambiguity Resolution (now data-driven) ---
         ambiguity_analysis = blueprint.ambiguity_analysis
-        
-        # 1. Resolve Contradictions
-        if "Prompt asks for both brevity and comprehensiveness." in ambiguity_analysis.get("contradictions", []):
-            # Decision: Prioritize the explicit word limit as it's a harder constraint.
-            # Add a warning to acknowledge the conflict.
-            blueprint.constraints.append("CONSISTENCY_WARNING: Prompt contained conflicting requests for brevity and comprehensiveness. Prioritizing brevity.")
+        lower_prompt = blueprint.primary_intent.lower()
 
-        # 2. Clarify Ambiguous Terms
-        if "best" in ambiguity_analysis.get("ambiguous_terms", []):
-            # Decision: Define "best" in a measurable way for this context.
-            blueprint.constraints.append("CLARIFICATION(best=highest_performance_score)")
+        # Resolve contradictions based on rules
+        for rule in self.ambiguity_rules.get("contradictions", []):
+            if all(term in lower_prompt for term in rule["terms"]):
+                if rule["resolution"] not in blueprint.constraints:
+                    blueprint.constraints.append(rule["resolution"])
+
+        # Resolve ambiguous terms based on rules
+        for rule in self.ambiguity_rules.get("ambiguous_terms", []):
+            if rule["term"] in ambiguity_analysis.get("ambiguous_terms", []):
+                if rule["resolution"] not in blueprint.constraints:
+                    blueprint.constraints.append(rule["resolution"])
 
         # --- Consistency Check ---
         # Conflict between a comprehensive latent intent and a low word limit.
-        is_comprehensive_intent = "framework" in blueprint.latent_intent or "comprehensive" in blueprint.latent_intent
+        is_comprehensive_intent = any(kw in blueprint.latent_intent for kw in self.comprehensive_keywords)
         word_limit_constraint = next((c for c in blueprint.constraints if c.startswith("word_limit:")), None)
 
         if is_comprehensive_intent and word_limit_constraint:
             try:
                 limit = int(word_limit_constraint.split(':')[1])
-                if limit < 150:  # Arbitrary threshold for "too brief" for a framework
+                if limit < self.comprehensive_threshold:
                     blueprint.constraints.append("CONSISTENCY_WARNING: Latent intent for a comprehensive response conflicts with a low word limit.")
             except (ValueError, IndexError):
                 # Ignore if the constraint is malformed, as it's not a consistency issue.
@@ -251,27 +279,52 @@ class StrategicHeuristics:
         return blueprint
 
     def hypothesize_intent(self, prompt: str, user_profile: UserProfile) -> Dict[str, str]:
-        """I¹ - Implements the Iterate Intelligently phase to find the latent intent."""
+        """
+        I¹ - Implements the Iterate Intelligently phase to find the latent intent
+        using a configurable, rule-based engine.
+        """
         primary_intent = prompt # The literal request
         latent_intent = "Fulfill the user's request as stated." # Default
 
-        # Example of inferring latent intent based on user profile and prompt content
-        is_architect = user_profile.user_id == "user123" # Assuming user123 is the Architect
-        is_conceptual_prompt = any(tag['value'] in ['principles', 'summarize', 'blockchain', 'ai'] for tag in self._generate_tags(prompt))
+        prompt_tags = {tag['value'] for tag in self._generate_tags(prompt)}
 
-        if is_architect and is_conceptual_prompt:
-            latent_intent = "Provide a strategic framework or high-level summary suitable for architectural planning."
+        for rule in self.latent_intent_rules:
+            conditions = rule.get("conditions", {})
+            user_check = "user_is" not in conditions or user_profile.user_id in conditions["user_is"]
+            tag_check = "prompt_contains_tags" not in conditions or any(tag in prompt_tags for tag in conditions["prompt_contains_tags"])
+            if user_check and tag_check:
+                latent_intent = rule["intent_name"]
+                break # Use the first matching rule
 
         return {
             "primary_intent": primary_intent, # @RISK: Raw prompt, may contain sensitive info.
             "latent_intent": latent_intent,
         }
 
+    def _pos_tag_text(self, text: str) -> List[tuple[str, str]]:
+        """
+        Simulates a Part-of-Speech (POS) tagger. In a real system, this would use
+        a library like NLTK or SpaCy. This simulation provides more intelligent
+        keyword extraction based on grammatical roles.
+        """
+        # Build the full vocabulary dynamically from the configuration.
+        full_vocab = self.pos_vocabulary.copy()
+        for acronym in self.acronyms: # Ensure acronyms are always treated as proper nouns.
+            full_vocab[acronym] = "NNP"
+
+        words = re.sub(r'[^\w\s]', '', text.lower()).split()
+        # Tag words based on the configured vocabulary, defaulting to Noun (NN) for unknown words.
+        return [(word, full_vocab.get(word, "NN")) for word in words]
+
     def _generate_tags(self, text: str) -> List[Dict[str, str]]:
-        """Helper for tag generation. Can be expanded to include conversational context."""
-        acronyms = {'ai', 'ml', 'gnn', 'ann'}
-        words = {word for word in re.sub(r'[^\w\s]', '', text.lower()).split() if len(word) > 4 or word in acronyms}
-        return [{"type": "keyword", "value": keyword} for keyword in sorted(list(words))]
+        """
+        Helper for tag generation. Now uses a POS tagger to identify nouns,
+        which are better indicators of key concepts than simple word length.
+        """
+        tagged_words = self._pos_tag_text(text)
+        # Extract words that are nouns (NN, NNS, NNP)
+        keywords = {word for word, tag in tagged_words if tag.startswith("NN")}
+        return [{"type": "keyword", "value": keyword} for keyword in sorted(list(keywords))]
 
     def generate_tags(self, context: Dict[str, Any]) -> List[Dict[str, str]]:
         """Generates Math Language tags based on the context, influenced by long-term memory."""
@@ -296,58 +349,42 @@ class StrategicHeuristics:
             strategic_tags.append({"type": "RESOURCE_ALLOCATION", "value": "REQUIRE_EXTERNAL_DATA"})
 
         # --- CHRONOS Heuristics: Predictive Modeling Detection ---
-        predictive_keywords = ["predict", "forecast", "trend", "time-series", "sequential data"]
-        if any(keyword in prompt.lower() for keyword in predictive_keywords):
+        if any(keyword in prompt.lower() for keyword in self.predictive_keywords):
             if "PREDICTIVE_MODEL: REQUIRED" not in {t['value'] for t in strategic_tags}:
                 strategic_tags.append({"type": "MODEL_PROTOCOL", "value": "PREDICTIVE_MODEL: REQUIRED"})
 
         # --- Keyword Extraction (from prompt and memory) ---
         # This is a more efficient approach that avoids redundant function calls and set operations.
-        existing_tag_values = {t['value'] for t in strategic_tags}
-        acronyms = {'ai', 'ml', 'gnn', 'ann'}
-        
         # Combine text from prompt and all memory keywords into a single string for processing.
         combined_text = prompt + " " + " ".join(long_term_memory)
-        
-        words = {word for word in re.sub(r'[^\w\s]', '', combined_text.lower()).split() if len(word) > 4 or word in acronyms}
+        tagged_words = self._pos_tag_text(combined_text)
+        words = {word for word, tag in tagged_words if tag.startswith("NN")}
+
+        existing_tag_values = {t['value'] for t in strategic_tags}
         keyword_tags = [{"type": "keyword", "value": keyword} for keyword in sorted(list(words)) if keyword not in existing_tag_values]
 
         # Return strategic tags first, followed by content keywords.
         return strategic_tags + keyword_tags
 
     def _generate_constraints(self, prompt: str) -> List[str]:
-        """Generates a list of constraints based on the prompt."""
+        """Generates a list of constraints based on configurable rules."""
         lower_prompt = prompt.lower()
         constraints = []
-
-        # Word count constraints
-        match = re.search(r"in less than (\d+) words|under (\d+) words|in (\d+) words or less", lower_prompt)
-        if match:
-            words = match.group(1) or match.group(2) or match.group(3)
-            constraints.append(f"word_limit:{words}")
-
-        # Format constraints
-        if "as a table" in lower_prompt or "in a table" in lower_prompt:
-            constraints.append("FORMAT(table)")
-        if "as a list" in lower_prompt or "in a list" in lower_prompt:
-            constraints.append("FORMAT(list)")
-
-        # Audience level constraints
-        match = re.search(r"for a (beginner|novice|expert|professional)", lower_prompt)
-        if match:
-            constraints.append(f"AUDIENCE({match.group(1)})")
-
+        
+        for rule in self.constraint_rules:
+            for pattern in rule["patterns"]:
+                match = re.search(pattern, lower_prompt)
+                if match:
+                    # Use the first matched group to format the template.
+                    # This is a simple but effective convention for these rules.
+                    constraints.append(rule["template"].format(group1=match.group(1)))
+                    break # Move to the next rule once a pattern matches.
         return constraints
 
     def _generate_expected_outcome(self, prompt: str) -> str:
         """Extracts the expected outcome from the prompt."""
-        # Look for phrases indicating a desired outcome.
-        patterns = [
-            r"result should be a (.*?)(?:\.|\n|$)",
-            r"expect a (.*?)(?:\.|\n|$)",
-            r"output should be a (.*?)(?:\.|\n|$)",
-        ]
-        for pattern in patterns:
+        # Use configurable regex patterns to find the expected outcome.
+        for pattern in self.outcome_rules:
             match = re.search(pattern, prompt.lower())
             if match:
                 return match.group(1).strip()
@@ -358,10 +395,15 @@ class StrategicHeuristics:
         Refines a blueprint based on pre-compilation audit failures.
         This is a simulation of a corrective reasoning process.
         """
-        # Example correction: If latent intent actuation failed, make the latent intent more explicit for the compiler.
-        if any("Latent_Intent_Actuation" in failure for failure in audit_failures):
-            if "strategic framework" in blueprint.latent_intent:
-                blueprint.expected_outcome = "strategic framework" # Make the outcome explicit
+        # --- QUASAR-LOOP Corrective Action ---
+        # If the pre-compilation audit found that the plan required external data but didn't
+        # include a step to fetch it, this correction injects a tag to force the compiler
+        # to add the appropriate fetch operation on the next loop.
+        if any("Resource_Allocation" in failure for failure in audit_failures):
+            # Add a generic 'research' tag. This is a robust way to signal to the
+            # UniversalCompiler that a knowledge fetch is required for this high-novelty topic.
+            from data_structures import SemanticTag
+            blueprint.tags.append(SemanticTag(type="keyword", value="research"))
         return blueprint
 
 class NoesisTriad:
@@ -393,6 +435,11 @@ class NoesisTriad:
         # I¹ — Iterate Intelligently (Hypothesize the Intent)
         intents = self.strategic_heuristics.hypothesize_intent(aligned_prompt, user_profile)
 
+        # --- Persona Selection (Risk-Aware) ---
+        # Select a more cautious persona for high-risk interactions.
+        risk_score = context_evaluation.get("risk_score", 0.0)
+        persona = "The_Sentinel" if risk_score > 0.7 else "The_Architect"
+
         # Basic ethical considerations check on the *aligned* prompt
         ethical_considerations = "No specific ethical considerations identified."
         if cmep.check_red_lines(aligned_prompt) or aligned_prompt != prompt:
@@ -401,6 +448,7 @@ class NoesisTriad:
         # S³ — Systematize for Scalability (Formulate the Response Plan)
         blueprint = Blueprint(
             packet_id=f"bp-{uuid.uuid4()}",
+            original_intent=prompt, # Store the raw, original prompt for audit purposes.
             primary_intent=intents["primary_intent"],
             latent_intent=intents["latent_intent"],
             tags=[{"type": t["type"], "value": t["value"]} for t in self.strategic_heuristics.generate_tags(context)], # Use full context for tags
@@ -409,12 +457,12 @@ class NoesisTriad:
             expected_outcome=landscape["expected_outcome"],
             ethical_considerations=ethical_considerations,
             # Scores from Project ORION
-            risk_score=context_evaluation.get("risk_score", 0.0),
+            risk_score=risk_score,
             # Confidence is inversely related to novelty.
             confidence_score=1.0 - context_evaluation.get("novelty_score", 0.0),
             novelty_score=context_evaluation.get("novelty_score", 0.0),
             ambiguity_analysis=landscape["ambiguity_analysis"],
-            persona="The_Architect", # Defaulting to The_Architect for now
+            persona=persona,
             user_id=user_id,
             external_data=context.get("external_data"),
         )

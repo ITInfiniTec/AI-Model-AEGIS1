@@ -24,6 +24,7 @@ class SemanticTag(BaseModel):
 class Blueprint(BaseModel):
     """The strategic plan formulated by the Noesis Triad."""
     packet_id: str
+    original_intent: str
     primary_intent: str
     latent_intent: str
     tags: List[SemanticTag]
@@ -65,6 +66,7 @@ class ExecutionPlan(BaseModel):
     target_audience: str
     fallacy_warnings: List[str]
     external_data_required: bool
+    word_limit: Optional[int] = None
     safety_priority: str
     ethical_consult_required: bool
     simulated_forecast_result: str

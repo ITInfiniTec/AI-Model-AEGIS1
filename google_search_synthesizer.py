@@ -1,11 +1,12 @@
 # google_search_synthesizer.py
 
 from typing import List, Optional
+from config_loader import config_loader
 
 class GoogleSearchSynthesizer:
     def __init__(self):
-        # Keywords that trigger an external search.
-        self.trigger_keywords = ["current events", "latest research", "new findings", "recent news"]
+        # Load trigger keywords from the central configuration.
+        self.trigger_keywords = config_loader.get_google_search_config().get("trigger_keywords", [])
 
     def fetch_external_context(self, prompt: str) -> Optional[str]:
         """

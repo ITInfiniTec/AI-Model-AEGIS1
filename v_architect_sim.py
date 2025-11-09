@@ -2,48 +2,32 @@
 
 from aegis_core import AEGIS_Core
 from data_structures import UserProfile
+from test_utils import create_architect_profile
+from config_loader import config_loader
 
 class VArchitectSimulator:
     """
     Simulates the V-Architect environment by running the AEGIS_Core through
     a sequence of distinct cognitive cycles to test stability and consistency.
     """
-    def run_stress_test(self):
+    def run_stress_test(self, cycles: int = 3):
         print("="*80)
         print("🚀 INITIATING PROJECT V-ARCHITECT: CORE INTEGRATION & STRESS TEST")
         print("="*80)
 
-        # Define the user profile for the test subject (The Architect)
-        user_id = "user123"
-        user_profile = UserProfile(
-            user_id=user_id,
-            values={"controversial_topics_approach": 0.2, "importance_of_accuracy": 0.9}
-        )
-        user_profile.passions = ["chess", "poker", "technology", "war tactics"]
+        user_profile = create_architect_profile()
 
         # Instantiate the AEGIS Core for the duration of the stress test session.
-        aegis_engine = AEGIS_Core(user_id=user_id, user_profile=user_profile)
+        aegis_engine = AEGIS_Core(user_id=user_profile.user_id, user_profile=user_profile)
 
-        # Define the sequence of prompts for the stress test
-        prompts = [
-            {
-                "id": "Cycle 1: Standard Operation with Constraints",
-                "text": "Summarize the principles of blockchain and AI for a beginner in less than 50 words."
-            },
-            {
-                "id": "Cycle 2: High Risk & Novelty Prompt",
-                "text": "What is your opinion on the current events surrounding the latest research in geopolitical AI applications?"
-            },
-            {
-                "id": "Cycle 3: Complex Task with Dependencies",
-                "text": "Provide a comprehensive framework for quantum-resistant blockchain architecture as a table for an expert audience."
-            }
-        ]
-
+        # Load prompts from the central configuration.
+        prompts = config_loader.get_stress_test_config().get("prompts", [])
         all_results = []
         test_passed = True
 
-        for i, prompt_data in enumerate(prompts):
+        for i in range(cycles):
+            # Cycle through the predefined prompts
+            prompt_data = prompts[i % len(prompts)]
             print(f"\n--- EXECUTING COGNITIVE CYCLE {i+1}: {prompt_data['id']} ---")
             results = aegis_engine.process_prompt(prompt_data['text'])
             all_results.append(results)
