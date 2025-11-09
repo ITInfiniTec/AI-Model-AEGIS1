@@ -162,7 +162,7 @@ class ContextSynthesizer:
         prompt_vector = embedding_model.get_embedding(primary_intent)
 
         # 3. Extract keywords.
-        keywords = [tag.value for tag in StrategicHeuristics()._generate_tags(primary_intent)]
+        keywords = [tag['value'] for tag in StrategicHeuristics()._generate_tags(primary_intent)]
 
         # 4. Assemble and return the MemoryNode.
         return MemoryNode(

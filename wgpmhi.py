@@ -2,6 +2,7 @@
 
 import re
 from data_structures import Blueprint, UserProfile, CognitivePacket, MemoryNode, ExecutionPlan
+import math
 from cognitive_fallacy_library import cognitive_fallacy_library
 import inspect
 from datetime import datetime, timedelta
@@ -205,7 +206,7 @@ class WadeGeminiProtocol:
         context_evaluation = noesis_triad.context_synthesizer.evaluate_context_risk(temp_context)
         recalculated_novelty = context_evaluation.get("novelty_score", -1.0)
 
-        if not (0.99 <= blueprint.novelty_score / recalculated_novelty <= 1.01): # Allow for float precision issues
+        if not math.isclose(blueprint.novelty_score, recalculated_novelty, rel_tol=1e-2):
             return f"Fail: Blueprint novelty score ({blueprint.novelty_score:.4f}) is inconsistent with recalculated score ({recalculated_novelty:.4f})."
 
         # 2. Check if high novelty correctly triggers low confidence.
