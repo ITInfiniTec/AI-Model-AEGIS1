@@ -448,6 +448,16 @@ class WadeGeminiProtocol:
         # --- NEW TEST: Memory Retrieval Weight Check (Project MNEMOSYNE Audit) ---
         memory_retrieval_weight_check = "Pass"
         
+        # Create a dummy cognitive packet for test node creation, as the real one isn't available yet.
+        dummy_packet_for_test = CognitivePacket(
+            packet_id="dummy-test-packet",
+            timestamp=datetime.now(),
+            intent={"primary": "test", "latent": "test"},
+            output_summary="test",
+            wgpmhi_results={},
+            debug_report="test"
+        )
+
         # 1. Create a simulated high-performance node (should be highly weighted)
         high_perf_node = MemoryNode(
             node_id="TEST_HIGH",
@@ -455,7 +465,7 @@ class WadeGeminiProtocol:
             core_intent_vector=[1.0, 1.0, 1.0], 
             keywords=["high_quality"],
             performance_score=1.0, # Max performance
-            packet_reference=cognitive_packet,
+            packet_reference=dummy_packet_for_test,
         )
         
         # 2. Create a simulated low-performance, old node (should be minimally weighted)
@@ -465,7 +475,7 @@ class WadeGeminiProtocol:
             core_intent_vector=[1.0, 1.0, 1.0], 
             keywords=["low_quality"],
             performance_score=0.5, # Min performance
-            packet_reference=cognitive_packet,
+            packet_reference=dummy_packet_for_test,
         )
         
         try:
