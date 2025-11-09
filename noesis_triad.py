@@ -9,6 +9,7 @@ from typing import List, Dict, Any
 from data_structures import Blueprint, UserProfile, CognitivePacket, MemoryNode
 from cmep import cmep
 from data_integrity_protocol import data_integrity_protocol
+from cognitive_fallacy_library import cognitive_fallacy_library
 from google_search_synthesizer import google_search_synthesizer, GoogleSearchSynthesizer
 from config import MEMORY_DECAY_TAU, MEMORY_RETRIEVAL_LIMIT
 

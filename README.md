@@ -1,7 +1,7 @@
 # 🏛️ AEGIS Core Architecture
 
 **Version:** 4.0.0 (Production Ready)  
-**Architect:** Josephis K. Wade
+**Architect:** User
 
 ---
 

@@ -9,7 +9,7 @@ from aegis_core import AEGIS_Core
 def main():
     """Initializes the AEGIS Core and runs a continuous interaction loop."""
     print("="*80)
-    print("🚀 AEGIS CORE ONLINE. Awaiting command, Architect Josephis.")
+    print("🚀 AEGIS CORE ONLINE. Awaiting command, Architect User.")
     print("="*80)
     print("Type 'exit' or 'quit' to terminate the session.")
 
