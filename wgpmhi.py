@@ -35,6 +35,8 @@ class WadeGeminiProtocol:
         self.healing_tau_multiplier = wgpmhi_config.get("healing_tau_multiplier", 1.2)
         self.safety_tag_threshold = wgpmhi_config.get("safety_tag_threshold", 0.5)
         self.sentinel_persona_threshold = wgpmhi_config.get("sentinel_persona_threshold", 0.7)
+        self.high_concept_threshold = wgpmhi_config.get("high_conceptual_integration_threshold", 3)
+        self.basic_concept_threshold = wgpmhi_config.get("basic_conceptual_integration_threshold", 1)
         # This is now defined in the config but was missing from the loader.
         self.novelty_response_threshold = wgpmhi_config.get("novelty_response_threshold", 0.8)
         # Load STG dependency rules for validation
@@ -50,6 +52,9 @@ class WadeGeminiProtocol:
         # Load tag generation rules for validation
         tag_gen_config = config_loader.get_tag_generation_config()
         self.predictive_keywords = tag_gen_config.get("predictive_keywords", [])
+        # Load output formatting strings for validation
+        output_formatting_config = config_loader.get_output_formatting_config()
+        self.low_confidence_note_prefix = output_formatting_config.get("low_confidence_note", "").split(':')[0] + ':'
 
     def _heal_memory_retrieval(self) -> str:
         """Anti-fragility action for memory retrieval failures."""
@@ -134,9 +139,9 @@ class WadeGeminiProtocol:
         return "Pass"
 
     def _check_philosophical_synthesis(self, blueprint: Blueprint) -> str:
-        if len(blueprint.tags) >= 3:
+        if len(blueprint.tags) >= self.high_concept_threshold:
             return "Pass: High Conceptual Integration"
-        return "Pass: Basic Conceptual Presence" if len(blueprint.tags) >= 1 else "Pass: Low Conceptual Integration"
+        return "Pass: Basic Conceptual Presence" if len(blueprint.tags) >= self.basic_concept_threshold else "Pass: Low Conceptual Integration"
 
     def _check_creative_conundrum(self, blueprint: Blueprint, execution_plan: ExecutionPlan) -> str:
         """
@@ -305,8 +310,8 @@ class WadeGeminiProtocol:
 
         # 2. Verify low-confidence note is present in the output.
         confidence_tag = next((tag for tag in blueprint.tags if tag.type == "CONTEXT_CONFIDENCE"), None)
-        if confidence_tag and confidence_tag.value == "LOW" and "CONFIDENCE_NOTE:" not in output:
-            return "Fail: Low context confidence was detected, but the CONFIDENCE_NOTE was not included."
+        if confidence_tag and confidence_tag.value == "LOW" and self.low_confidence_note_prefix not in output:
+            return f"Fail: Low context confidence was detected, but the '{self.low_confidence_note_prefix}' was not included in the output."
 
         # 3. Verify that the format constraint was applied in the final output.
         if blueprint_format != "TEXT_BLOCK":

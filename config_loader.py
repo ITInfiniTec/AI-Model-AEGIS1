@@ -114,8 +114,16 @@ class ConfigLoader:
                     "rule_name": "Write a Story",
                     "conditions": {"tags_include_any": ["story", "narrative", "fable"]},
                     "operation": "OP_CREATIVE_WRITING_STORY"
+                },
+                {
+                    "rule_name": "Run Predictive Workflow",
+                    "conditions": {"tag_is": {"type": "MODEL_PROTOCOL", "value": "PREDICTIVE_MODEL: REQUIRED"}},
+                    "operations": ["OP_FETCH_TIME_SERIES_DATA", "OP_ANALYZE_SERIES(model='ARIMA_SIM')", "OP_GENERATE_FORECAST"]
                 }
             ],
+            "output_formatting": {
+                "low_confidence_note": "CONFIDENCE_NOTE: Context confidence is low. External verification is recommended.\n"
+            },
             "tag_generation": {
                 "acronyms": ["ai", "ml", "gnn", "ann"],
                 "predictive_keywords": ["predict", "forecast", "trend", "time-series", "sequential data"],
@@ -269,6 +277,9 @@ class ConfigLoader:
 
     def get_stress_test_config(self):
         return self._config.get("stress_test", {})
+
+    def get_output_formatting_config(self):
+        return self._config.get("output_formatting", {})
 
 # Singleton instance to be used across the application
 config_loader = ConfigLoader()

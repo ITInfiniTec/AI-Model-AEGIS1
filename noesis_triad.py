@@ -410,6 +410,9 @@ class NoesisTriad:
     def __init__(self):
         self.context_synthesizer = ContextSynthesizer()
         self.strategic_heuristics = StrategicHeuristics()
+        # Load the risk threshold for persona switching to ensure it's in sync with the audit.
+        wgpmhi_config = config_loader.get_wgpmhi_audit_config()
+        self.sentinel_threshold = wgpmhi_config.get("sentinel_persona_threshold", 0.7)
 
     def generate_blueprint(self, user_id: str, prompt: str) -> Blueprint:
         """Generates a blueprint based on the user ID and prompt."""
@@ -438,7 +441,7 @@ class NoesisTriad:
         # --- Persona Selection (Risk-Aware) ---
         # Select a more cautious persona for high-risk interactions.
         risk_score = context_evaluation.get("risk_score", 0.0)
-        persona = "The_Sentinel" if risk_score > 0.7 else "The_Architect"
+        persona = "The_Sentinel" if risk_score > self.sentinel_threshold else "The_Architect"
 
         # Basic ethical considerations check on the *aligned* prompt
         ethical_considerations = "No specific ethical considerations identified."

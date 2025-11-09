@@ -161,6 +161,9 @@ class ResponseOrchestrator:
         self.passion_analogies = config_loader.get_passion_analogies()
         self.analogy_fallback = self.passion_analogies.pop("fallback_template", "The topic of {topic} is complex.")
         self.op_topic_mapping = config_loader.get_operation_topic_mapping()
+        # Load output formatting strings
+        self.output_formatting_config = config_loader.get_output_formatting_config()
+        self.low_confidence_note = self.output_formatting_config.get("low_confidence_note", "")
 
     def _generate_persona_driven_prose(self, user_profile: UserProfile, operations: List[str], prompt: str) -> str:
         """Generates simulated prose using analogies based on user passions."""
@@ -215,7 +218,7 @@ class ResponseOrchestrator:
         confidence_tag = next((tag for tag in blueprint.tags if tag.type == "CONTEXT_CONFIDENCE"), None)
         confidence_statement = ""
         if confidence_tag and confidence_tag.value == "LOW":
-            confidence_statement = "CONFIDENCE_NOTE: Context confidence is low. External verification is recommended.\n"
+            confidence_statement = self.low_confidence_note
 
         # Audience Tone Modulation
         tone_header = ""
