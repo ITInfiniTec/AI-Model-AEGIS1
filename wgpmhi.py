@@ -1,4 +1,3 @@
-```python
 # wgpmhi.py
 
 import re
@@ -558,4 +557,3 @@ class WadeGeminiProtocol:
         return results
 
 wgpmhi = WadeGeminiProtocol()
-```
