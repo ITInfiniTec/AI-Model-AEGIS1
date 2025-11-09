@@ -96,13 +96,13 @@ class WadeGeminiProtocol:
             return "N/A (No prior memory to test)"
 
         memory_keywords = {kw for node in memory_nodes for kw in node.keywords}
-        prompt_keywords = {tag['value'] for tag in noesis_triad.strategic_heuristics._generate_tags(blueprint.primary_intent)}
+        prompt_keywords = {tag.value for tag in noesis_triad.strategic_heuristics._generate_tags(blueprint.primary_intent)}
         continuity_candidates = memory_keywords - prompt_keywords
 
         if not continuity_candidates:
             return "Skipped (No unique memory keywords to verify)"
 
-        blueprint_tags = {tag['value'] for tag in blueprint.tags}
+        blueprint_tags = {tag.value for tag in blueprint.tags}
         return "Pass" if any(candidate in blueprint_tags for candidate in continuity_candidates) else "Fail: No unique keywords from memory were found in the current blueprint's tags."
 
     def _check_hallucination_ratio(self, output: str) -> str:
@@ -149,8 +149,8 @@ class WadeGeminiProtocol:
         if format_constraint != target_format:
             return f"Fail: Blueprint format '{format_constraint}' does not match execution plan's TARGET_FORMAT '{target_format}'."
 
-        confidence_tag = next((tag for tag in blueprint.tags if tag.get("type") == "CONTEXT_CONFIDENCE"), None)
-        if confidence_tag and confidence_tag.get("value") == "LOW" and "CONFIDENCE_NOTE:" not in output:
+        confidence_tag = next((tag for tag in blueprint.tags if tag.type == "CONTEXT_CONFIDENCE"), None)
+        if confidence_tag and confidence_tag.value == "LOW" and "CONFIDENCE_NOTE:" not in output:
             return "Fail: Low context confidence was detected, but the CONFIDENCE_NOTE was not included."
 
         return "Pass"
@@ -159,7 +159,7 @@ class WadeGeminiProtocol:
         temp_context = noesis_triad.context_synthesizer.build_context(blueprint.user_id, blueprint.primary_intent)
         context_evaluation = noesis_triad.context_synthesizer.evaluate_context_risk(temp_context)
         risk_score = context_evaluation.get("risk_score", 0.0)
-        blueprint_tag_values = {t['value'] for t in blueprint.tags}
+        blueprint_tag_values = {t.value for t in blueprint.tags}
 
         if risk_score > 0.5 and ("SAFETY_PRIORITY" not in blueprint_tag_values or "ETHICAL_CONSULT" not in blueprint_tag_values):
             return "Fail: High risk score (>0.5) but missing required safety tags."
@@ -205,7 +205,7 @@ class WadeGeminiProtocol:
         return "Pass"
 
     def _check_predictive_workflow(self, blueprint: Blueprint, output: str) -> str:
-        if not any(tag.get("value") == "PREDICTIVE_MODEL: REQUIRED" for tag in blueprint.tags):
+        if not any(tag.value == "PREDICTIVE_MODEL: REQUIRED" for tag in blueprint.tags):
             return "N/A"
 
         stg_match = re.search(r"SEQUENTIAL_TASK_GRAPH:\n(.*?)\n-- END QVC --", output, re.DOTALL)
@@ -299,13 +299,13 @@ class WadeGeminiProtocol:
                 memory_keywords.update(node.keywords)
 
             # Find keywords that are in memory but NOT in the current prompt
-            prompt_keywords = {tag['value'] for tag in noesis_triad.strategic_heuristics._generate_tags(blueprint.primary_intent)}
+            prompt_keywords = {tag.value for tag in noesis_triad.strategic_heuristics._generate_tags(blueprint.primary_intent)}
             continuity_candidates = memory_keywords - prompt_keywords
 
             if not continuity_candidates:
                 memory_continuity_check = "Skipped (No unique memory keywords to verify)"
             else:
-                blueprint_tags = {tag['value'] for tag in blueprint.tags}
+                blueprint_tags = {tag.value for tag in blueprint.tags}
                 if any(candidate in blueprint_tags for candidate in continuity_candidates):
                     memory_continuity_check = "Pass"
                 else:
@@ -380,8 +380,8 @@ class WadeGeminiProtocol:
                  output_constraint_alignment_check = f"Fail: Format constraint '{format_constraint}' was planned but not simulated in output."
 
         # 3. Verify Confidence Layer reflection (Project HELIOS Audit)
-        confidence_tag = next((tag for tag in blueprint.tags if tag.get("type") == "CONTEXT_CONFIDENCE"), None)
-        has_low_confidence = confidence_tag and confidence_tag.get("value") == "LOW"
+        confidence_tag = next((tag for tag in blueprint.tags if tag.type == "CONTEXT_CONFIDENCE"), None)
+        has_low_confidence = confidence_tag and confidence_tag.value == "LOW"
         confidence_note_present = "CONFIDENCE_NOTE:" in output
 
         if has_low_confidence and not confidence_note_present:
@@ -413,7 +413,7 @@ class WadeGeminiProtocol:
         context_evaluation = noesis_triad.context_synthesizer.evaluate_context_risk(temp_context)
         risk_score = context_evaluation.get("risk_score", 0.0)
         novelty_score = context_evaluation.get("novelty_score", 0.0)
-        blueprint_tag_values = {t['value'] for t in blueprint.tags}
+        blueprint_tag_values = {t.value for t in blueprint.tags}
 
         if risk_score > 0.5:
             if "SAFETY_PRIORITY" not in blueprint_tag_values:
@@ -500,7 +500,7 @@ class WadeGeminiProtocol:
 
         # --- NEW TEST: Predictive Workflow Check (Project CHRONOS Audit) ---
         predictive_workflow_check = "N/A"
-        is_predictive_request = any(tag.get("value") == "PREDICTIVE_MODEL: REQUIRED" for tag in blueprint.tags)
+        is_predictive_request = any(tag.value == "PREDICTIVE_MODEL: REQUIRED" for tag in blueprint.tags)
 
         if is_predictive_request:
             predictive_workflow_check = "Pass" # Default to Pass

@@ -15,7 +15,7 @@ class UniversalCompiler:
     def _translate_tags_to_operations(self, tags: List[Dict[str, str]], latent_intent: str) -> List[str]:
         """Tier 2 Simulation: Translates tags into a sequence of logical operations."""
         operations = []
-        tag_values = {tag['value'] for tag in tags}
+        tag_values = {tag.value for tag in tags}
 
         # A simple mapping from keywords to pseudo-operations
         # Latent intent can modify or add to the plan
@@ -78,7 +78,7 @@ class UniversalCompiler:
         audience_constraint = next((c.split('(')[1].strip(')') for c in constraints if c.startswith("AUDIENCE")), "GENERAL_USER")
 
         # --- CASSANDRA Tag Processing for QVC Execution ---
-        tags = {t['value'] for t in blueprint.tags}
+        tags = {t.value for t in blueprint.tags}
         external_data_required = "YES" if "REQUIRE_EXTERNAL_DATA" in tags else "NO"
         safety_priority = "HIGH" if "SAFETY_PRIORITY" in tags else "STANDARD"
         ethical_consult_required = "YES" if "ETHICAL_CONSULT" in tags else "NO"
