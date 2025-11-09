@@ -1,6 +1,6 @@
 # data_structures.py
 
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
 
@@ -9,12 +9,15 @@ class CognitivePacket(BaseModel):
     packet_id: str
     timestamp: datetime
     intent: Dict[str, Any]
+    risk_score: float
+    novelty_score: float
     output_summary: str
     wgpmhi_results: Dict[str, Any]
     debug_report: str
 
 
-class MathLanguageTag(BaseModel):
+class SemanticTag(BaseModel):
+    """Represents a semantic tag extracted from a prompt or context."""
     type: str
     value: str
 
@@ -23,7 +26,7 @@ class Blueprint(BaseModel):
     packet_id: str
     primary_intent: str
     latent_intent: str
-    tags: List[MathLanguageTag]
+    tags: List[SemanticTag]
     constraints: List[str]
     fallacies: List[str]
     expected_outcome: str
@@ -34,6 +37,7 @@ class Blueprint(BaseModel):
     ambiguity_analysis: Dict[str, List[str]]
     persona: str
     user_id: str
+    external_data: Optional[str] = None
 
 class UserProfile(BaseModel):
     """Defines the user's characteristics and preferences."""
@@ -43,15 +47,28 @@ class UserProfile(BaseModel):
 
 class MemoryNode(BaseModel):
     """A node in the long-term memory graph, representing a past interaction."""
-    id: str = Field(..., alias="node_id")
+    node_id: str
     timestamp: datetime
     core_intent_vector: List[float]
     keywords: List[str]
     performance_score: float
     packet_reference: CognitivePacket
 
-    class Config:
-        populate_by_name = True
+class ExecutionPlan(BaseModel):
+    """
+    A structured representation of the compiled plan from the UniversalCompiler.
+    This replaces the brittle QVC string format with a robust data contract.
+    """
+    intent_hash: int
+    constraints: List[str]
+    target_format: str
+    target_audience: str
+    fallacy_warnings: List[str]
+    external_data_required: bool
+    safety_priority: str
+    ethical_consult_required: bool
+    simulated_forecast_result: str
+    stg: Dict[str, Dict[str, Any]]
 
 class TimeDataSeries(BaseModel):
     """

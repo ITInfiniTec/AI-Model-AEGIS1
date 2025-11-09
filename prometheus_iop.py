@@ -1,7 +1,8 @@
 # prometheus_iop.py
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, List
 from data_structures import TimeDataSeries, CognitivePacket
 from datetime import datetime, timedelta
+from logger import log
 
 class Prometheus_IOP:
     """
@@ -22,7 +23,7 @@ class Prometheus_IOP:
             value = 100.0 + (i * 5.0) + (i % 2) 
             data_points.append((timestamp, value))
             
-        print(f"IOP: Successfully fetched TimeDataSeries '{series_id}' with {len(data_points)} points.")
+        log.info(f"Successfully fetched TimeDataSeries '{series_id}' with {len(data_points)} points.")
         return TimeDataSeries(series_id=series_id, data_points=data_points)
 
     def send_cognitive_packet(self, packet: CognitivePacket) -> Dict[str, Any]:
@@ -30,7 +31,7 @@ class Prometheus_IOP:
         Simulates sending the CognitivePacket to the Prometheus training/monitoring queue.
         """
         # In a real system, this would push the data to a Kafka topic or DLT queue.
-        print(f"IOP: Queued CognitivePacket ID {packet.packet_id[:8]}... to Prometheus Monitor.")
+        log.info(f"Queued CognitivePacket ID {packet.packet_id[:8]}... to Prometheus Monitor.")
         return {"status": "success", "queue_time": datetime.now().isoformat()}
 
 # Singleton instance

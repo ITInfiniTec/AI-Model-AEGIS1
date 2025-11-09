@@ -24,6 +24,8 @@ class CognitivePacketGenerator:
                 "primary": blueprint.primary_intent,
                 "latent": blueprint.latent_intent,
             },
+            risk_score=blueprint.risk_score,
+            novelty_score=blueprint.novelty_score,
             output_summary=output_summary,
             wgpmhi_results=wgpmhi_results,
             # The debug report is a dictionary; we'll serialize it to a string for the packet.

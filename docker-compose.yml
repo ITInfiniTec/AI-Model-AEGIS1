@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  # Development service with live-reloading
+  dev:
+    # Tells Docker Compose to build the image from the Dockerfile in the current directory.
+    build: .
+    # Names the container for easier identification.
+    container_name: aegis_core_dev
+    # Maps port 5000 on the host machine to port 5000 in the container.
+    ports:
+      - "5000:5000"
+    # Sets up volume mounts. This is crucial for local development.
+    # It maps the current directory on the host to /app in the container.
+    # Any code changes made locally will be immediately reflected inside the container,
+    # allowing the Flask development server to auto-reload.
+    volumes:
+      - .:/app
+    # Overrides the Dockerfile's CMD to run Flask's development server with auto-reloading.
+    command: ["flask", "run", "--host=0.0.0.0", "--port=5000"]
+    # This service will only run if the 'dev' profile is activated.
+    profiles: ["dev"]
+
+  # Production simulation service
+  prod-sim:
+    build: .
+    container_name: aegis_core_prod_sim
+    ports:
+      - "5001:5000" # Map to a different host port to avoid conflicts with dev
+    # This service uses the original CMD from the Dockerfile (Gunicorn) and does not mount volumes.
+    # It provides a high-fidelity simulation of the production container.
+    profiles: ["prod-sim"]

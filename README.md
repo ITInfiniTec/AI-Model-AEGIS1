@@ -54,7 +54,6 @@ The AEGIS Core is encapsulated in the `AEGIS_Core` class. To run the system, exe
 *   `view_memory`: Displays a summary of all interactions stored in the current session's long-term memory.
 *   `clear_memory`: Clears the long-term memory for the current session.
 *   `view_node <node_id>`: Shows the full `CognitivePacket` details for a specific memory node.
-*   `save_memory`: Saves the current session's long-term memory to `memory_log.json`.
-*   `load_memory`: Loads a previously saved `memory_log.json` into the current session.
 *   `view_config`: Displays the current system configuration from `config_loader.py`.
+*   `stress_test`: Runs the full V-Architect integration and stability stress test.
 *   `exit` / `quit`: Terminates the session.

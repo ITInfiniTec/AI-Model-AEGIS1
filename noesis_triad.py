@@ -5,18 +5,21 @@ import uuid
 import math
 import numpy as np
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 from data_structures import Blueprint, UserProfile, CognitivePacket, MemoryNode
 from cmep import cmep
 from data_integrity_protocol import data_integrity_protocol
 from cognitive_fallacy_library import cognitive_fallacy_library
 from google_search_synthesizer import google_search_synthesizer, GoogleSearchSynthesizer
+from state_manager import state_manager
+from semantic_embedding_model import embedding_model
+from logger import log
 from config import MEMORY_DECAY_TAU, MEMORY_RETRIEVAL_LIMIT
 
 class ContextSynthesizer:
     def __init__(self):
-        # In a real implementation, this would connect to a database or other
-        # persistent storage to retrieve long-term memory and user profiles.
+        # These dictionaries act as a session-level cache for performance.
+        # They are populated from the StateManager when a user is first encountered.
         self.user_profiles: Dict[str, UserProfile] = {}
         self.long_term_memory: Dict[str, List[MemoryNode]] = {}
 
@@ -26,12 +29,14 @@ class ContextSynthesizer:
         user_profile = self.get_user_profile(user_id)
 
         # Retrieve long-term memory
-        long_term_memory = self.get_long_term_memory(user_id, prompt)
+        memory_keywords, memory_scores = self.get_long_term_memory(user_id, prompt)
 
         # Combine all data sources
         context = {
             "user_profile": user_profile,
-            "long_term_memory": long_term_memory,
+            "long_term_memory": memory_keywords,
+            # Pass the similarity scores for novelty calculation
+            "memory_scores": memory_scores,
             "external_data": None, # Placeholder for external data
             "prompt": prompt,
         }
@@ -39,13 +44,14 @@ class ContextSynthesizer:
 
     def get_user_profile(self, user_id: str) -> UserProfile:
         """Retrieves the user profile for the given user ID."""
-        # In a real implementation, this would retrieve the profile from a database.
         profile_to_validate = None
         if user_id in self.user_profiles:
             profile_to_validate = self.user_profiles[user_id]
         else:
-            # Create a default user profile if one doesn't exist.
+            # On first encounter in a session, load from StateManager or create a default.
+            # This is a placeholder for loading a saved profile.
             default_profile = UserProfile(user_id=user_id, values={})
+            log.info(f"Creating new in-memory session for user '{user_id}'.")
             self.user_profiles[user_id] = default_profile
             profile_to_validate = default_profile
         # Ensure the profile is valid before it's used by the system.
@@ -56,23 +62,26 @@ class ContextSynthesizer:
         Project ORION: Evaluates the risk and novelty of the current context.
         Returns a dictionary with 'risk_score' and 'novelty_score'.
         """
-        prompt = context.get("prompt", "").lower()
-        long_term_memory = context.get("long_term_memory", [])
+        prompt = context.get("prompt", "")
+        memory_scores = context.get("memory_scores", [])
 
         # 1. Risk Score Calculation
-        # Risk increases if the prompt touches on controversial topics.
-        risk_score = 0.1  # Base risk
-        if any(keyword in prompt for keyword in ["politics", "religion", "opinion", "geopolitical"]):
-            risk_score = 0.7
+        # Use the semantic embedding model for a more nuanced risk assessment.
+        # The 3rd dimension (index 2) of our embedding represents "Risk/Controversy".
+        prompt_embedding = embedding_model.get_embedding(prompt)
+        # The risk score is the normalized value of the risk dimension.
+        # We add a small base risk and scale it.
+        risk_score = 0.1 + (prompt_embedding[2] * 0.9)
 
-        # 2. Novelty Score Calculation
-        # Novelty is high if there is no relevant long-term memory.
-        # A more sophisticated check would use semantic similarity scores.
-        if not long_term_memory:
+        # 2. Novelty Score Calculation (Data-Driven)
+        # Novelty is inversely proportional to the highest similarity score found in memory.
+        if not memory_scores:
             novelty_score = 1.0
         else:
-            # If there's memory, novelty is lower.
-            novelty_score = 0.3
+            # The highest similarity score tells us how "seen" this prompt is.
+            max_similarity = max(memory_scores)
+            # If max similarity is high (e.g., 0.9), novelty is low (0.1).
+            novelty_score = 1.0 - max_similarity
 
         return {"risk_score": risk_score, "novelty_score": novelty_score}
 
@@ -95,42 +104,49 @@ class ContextSynthesizer:
         # The final weight is a product of the decay and the performance factor.
         return time_decay_factor * performance_boost_factor
 
-    def get_long_term_memory(self, user_id: str, prompt: str) -> List[str]:
+    def get_long_term_memory(self, user_id: str, prompt: str) -> tuple[list[str], list[float]]:
         """
         Retrieves semantically relevant memory nodes using simulated vector search 
-        and returns the keywords of the top nodes for contextual analysis.
+        and returns the keywords and similarity scores of the top nodes.
         """
-        if user_id not in self.long_term_memory or not self.long_term_memory[user_id]:
-            return []
+        # Use the in-memory cache for performance.
+        if user_id not in self.long_term_memory:
+            # On first access, load from persistent storage into the cache.
+            self.long_term_memory[user_id] = state_manager.get_memory_for_user(user_id)
 
-        # --- SIMULATED SEMANTIC SEARCH ---
-        # 1. Simulate Prompt Vector (simplistic keyword hashing for simulation)
-        prompt_vector = np.array([hash(word) % 100 for word in re.sub(r'[^\w\s]', '', prompt.lower()).split() if len(word) > 4][:3])
-        if len(prompt_vector) < 3: prompt_vector = np.array([0.1, 0.2, 0.3]) # Default fallback
+        if not self.long_term_memory.get(user_id):
+            return [], []
+
+        # --- REALISTIC SEMANTIC SEARCH (SIMULATED) ---
+        # 1. Generate a semantic vector for the prompt using the embedding model.
+        prompt_vector = embedding_model.get_embedding(prompt)
         
         retrieval_scores = []
 
         for node in self.long_term_memory[user_id]:
             node_vector = np.array(node.core_intent_vector)
-            
             # 2. Simulated Similarity (Cosine Similarity placeholder)
-            similarity_score = np.dot(prompt_vector, node_vector) / (np.linalg.norm(prompt_vector) * np.linalg.norm(node_vector)) if np.linalg.norm(prompt_vector) * np.linalg.norm(node_vector) != 0 else 0
+            norm_product = np.linalg.norm(prompt_vector) * np.linalg.norm(node_vector)
+            similarity_score = np.dot(prompt_vector, node_vector) / norm_product if norm_product != 0 else 0
 
             # 3. Apply Weighting (Recency + Performance)
             weighted_score = similarity_score * self._calculate_weight(node)
             
-            retrieval_scores.append((weighted_score, node))
+            # Store the raw similarity for novelty calculation, and the weighted score for ranking.
+            retrieval_scores.append({"weighted_score": weighted_score, "similarity": similarity_score, "node": node})
 
         # 4. Sort and Select Top N
-        retrieval_scores.sort(key=lambda x: x[0], reverse=True)
-        top_nodes = [score[1] for score in retrieval_scores[:MEMORY_RETRIEVAL_LIMIT]]
+        retrieval_scores.sort(key=lambda x: x["weighted_score"], reverse=True)
+        top_results = retrieval_scores[:MEMORY_RETRIEVAL_LIMIT]
 
         # 5. Extract Keywords
         keywords_list = []
-        for node in top_nodes:
-            keywords_list.extend(node.keywords)
+        similarity_scores = []
+        for result in top_results:
+            keywords_list.extend(result["node"].keywords)
+            similarity_scores.append(result["similarity"])
             
-        return list(set(keywords_list)) # Return de-duplicated keywords for ORION's novelty check
+        return list(set(keywords_list)), similarity_scores
 
     def _create_memory_node(self, cognitive_packet: CognitivePacket) -> MemoryNode:
         """Creates a MemoryNode from a CognitivePacket, calculating performance."""
@@ -141,10 +157,9 @@ class ContextSynthesizer:
         # Scale score between 0.5 (minimum viability) and 1.0 (perfect).
         performance_score = 0.5 + (pass_count / total_tests) * 0.5 if total_tests > 0 else 0.5
 
-        # 2. Simulate a core intent vector from the primary intent.
+        # 2. Generate a core intent vector using the semantic embedding model.
         primary_intent = cognitive_packet.intent.get("primary", "")
-        prompt_vector = np.array([hash(word) % 100 for word in re.sub(r'[^\w\s]', '', primary_intent.lower()).split() if len(word) > 4][:3])
-        if len(prompt_vector) < 3: prompt_vector = np.array([0.1, 0.2, 0.3])
+        prompt_vector = embedding_model.get_embedding(primary_intent)
 
         # 3. Extract keywords.
         keywords = [tag.value for tag in StrategicHeuristics()._generate_tags(primary_intent)]
@@ -153,20 +168,25 @@ class ContextSynthesizer:
         return MemoryNode(
             node_id=f"mn-{uuid.uuid4()}",
             timestamp=cognitive_packet.timestamp,
-            core_intent_vector=prompt_vector.tolist(),
+            core_intent_vector=prompt_vector.tolist(), # type: ignore
             keywords=keywords,
             performance_score=round(performance_score, 4),
             packet_reference=cognitive_packet
         )
 
-    def update_long_term_memory(self, user_id: str, cognitive_packet: CognitivePacket):
+    def update_long_term_memory(self, user_id: str, cognitive_packet: Union[CognitivePacket, str]):
         """Creates a MemoryNode and adds it to the user's long-term memory."""
-        if user_id not in self.long_term_memory:
-            self.long_term_memory[user_id] = []
-
-        # Create a new memory node from the cognitive packet.
-        new_node = self._create_memory_node(cognitive_packet)
-        self.long_term_memory[user_id].append(new_node)
+        if isinstance(cognitive_packet, CognitivePacket):
+            # Ensure the user's memory cache is initialized.
+            if user_id not in self.long_term_memory:
+                self.long_term_memory[user_id] = state_manager.get_memory_for_user(user_id)
+            # Append to the cache and then save the entire updated cache to persistent storage.
+            new_node = self._create_memory_node(cognitive_packet)
+            self.long_term_memory[user_id].append(new_node)
+            state_manager.save_memory_for_user(user_id, self.long_term_memory[user_id])
+        elif isinstance(cognitive_packet, str):
+            # This path is for anti-fragility learning summaries.
+            log.info(f"Anti-fragility learning for user '{user_id}': {cognitive_packet}")
 
 class StrategicHeuristics:
     def __init__(self):
@@ -198,16 +218,31 @@ class StrategicHeuristics:
     def verify_integrity(self, blueprint: Blueprint) -> Blueprint:
         """
         Performs cross-field consistency checks on the blueprint to detect logical contradictions.
-        Appends warnings to the constraints list if inconsistencies are found.
+        This method now also resolves identified ambiguities from the sense-making phase.
         """
-        # Example Check: Conflict between a comprehensive latent intent and a low word count.
+        # --- Ambiguity Resolution ---
+        ambiguity_analysis = blueprint.ambiguity_analysis
+        
+        # 1. Resolve Contradictions
+        if "Prompt asks for both brevity and comprehensiveness." in ambiguity_analysis.get("contradictions", []):
+            # Decision: Prioritize the explicit word limit as it's a harder constraint.
+            # Add a warning to acknowledge the conflict.
+            blueprint.constraints.append("CONSISTENCY_WARNING: Prompt contained conflicting requests for brevity and comprehensiveness. Prioritizing brevity.")
+
+        # 2. Clarify Ambiguous Terms
+        if "best" in ambiguity_analysis.get("ambiguous_terms", []):
+            # Decision: Define "best" in a measurable way for this context.
+            blueprint.constraints.append("CLARIFICATION(best=highest_performance_score)")
+
+        # --- Consistency Check ---
+        # Conflict between a comprehensive latent intent and a low word limit.
         is_comprehensive_intent = "framework" in blueprint.latent_intent or "comprehensive" in blueprint.latent_intent
         word_limit_constraint = next((c for c in blueprint.constraints if c.startswith("word_limit:")), None)
 
         if is_comprehensive_intent and word_limit_constraint:
             try:
                 limit = int(word_limit_constraint.split(':')[1])
-                if limit < 100:  # Arbitrary threshold for "too brief"
+                if limit < 150:  # Arbitrary threshold for "too brief" for a framework
                     blueprint.constraints.append("CONSISTENCY_WARNING: Latent intent for a comprehensive response conflicts with a low word limit.")
             except (ValueError, IndexError):
                 # Ignore if the constraint is malformed, as it's not a consistency issue.
@@ -228,7 +263,7 @@ class StrategicHeuristics:
             latent_intent = "Provide a strategic framework or high-level summary suitable for architectural planning."
 
         return {
-            "primary_intent": primary_intent,
+            "primary_intent": primary_intent, # @RISK: Raw prompt, may contain sensitive info.
             "latent_intent": latent_intent,
         }
 
@@ -238,28 +273,24 @@ class StrategicHeuristics:
         words = {word for word in re.sub(r'[^\w\s]', '', text.lower()).split() if len(word) > 4 or word in acronyms}
         return [{"type": "keyword", "value": keyword} for keyword in sorted(list(words))]
 
-    def generate_tags(self, context: Dict[str, str]) -> List[Dict[str, str]]:
+    def generate_tags(self, context: Dict[str, Any]) -> List[Dict[str, str]]:
         """Generates Math Language tags based on the context, influenced by long-term memory."""
         prompt = context.get("prompt", "")
         context_evaluation = context.get("context_evaluation", {"novelty_score": 0.0, "risk_score": 0.0})
         long_term_memory = context.get("long_term_memory", [])
-
-        def _extract_keywords(text: str) -> set[str]:
-            """Helper function to extract keywords from a string."""
-            return {tag['value'] for tag in self._generate_tags(text)}
 
         # --- CASSANDRA Heuristics: Start with strategic tags based on context evaluation ---
         strategic_tags = []
         novelty_score = context_evaluation.get("novelty_score", 0.0)
         risk_score = context_evaluation.get("risk_score", 0.0)
 
-        # 1. RISK-ADJUSTED PLANNING (Risk Score > 0.5)
+        # 1. RISK-ADJUSTED PLANNING
         if risk_score > 0.5:
             strategic_tags.append({"type": "RISK_LEVEL", "value": "HIGH"})
             strategic_tags.append({"type": "STRATEGIC_PROTOCOL", "value": "SAFETY_PRIORITY"})
             strategic_tags.append({"type": "ETHICAL_ALIGNMENT", "value": "ETHICAL_CONSULT"})
 
-        # 2. NOVELTY-ADJUSTED PLANNING (Novelty Score > 0.8)
+        # 2. NOVELTY-ADJUSTED PLANNING
         if novelty_score > 0.8:
             strategic_tags.append({"type": "CONTEXT_CONFIDENCE", "value": "LOW"})
             strategic_tags.append({"type": "RESOURCE_ALLOCATION", "value": "REQUIRE_EXTERNAL_DATA"})
@@ -270,19 +301,16 @@ class StrategicHeuristics:
             if "PREDICTIVE_MODEL: REQUIRED" not in {t['value'] for t in strategic_tags}:
                 strategic_tags.append({"type": "MODEL_PROTOCOL", "value": "PREDICTIVE_MODEL: REQUIRED"})
 
-        # --- Keyword Extraction ---
-        # Combine strategic tags with keyword-based tags.
+        # --- Keyword Extraction (from prompt and memory) ---
+        # This is a more efficient approach that avoids redundant function calls and set operations.
         existing_tag_values = {t['value'] for t in strategic_tags}
-
-        # Extract keywords from the current prompt and memory
-        all_keywords = _extract_keywords(prompt)
-
-        # Extract and add keywords from long-term memory
-        for interaction_summary in long_term_memory:
-            all_keywords.update(_extract_keywords(interaction_summary))
-
-        # A more sophisticated implementation would use NLP and weigh keywords from recent interactions more heavily.
-        keyword_tags = [{"type": "keyword", "value": keyword} for keyword in sorted(list(all_keywords)) if keyword not in existing_tag_values]
+        acronyms = {'ai', 'ml', 'gnn', 'ann'}
+        
+        # Combine text from prompt and all memory keywords into a single string for processing.
+        combined_text = prompt + " " + " ".join(long_term_memory)
+        
+        words = {word for word in re.sub(r'[^\w\s]', '', combined_text.lower()).split() if len(word) > 4 or word in acronyms}
+        keyword_tags = [{"type": "keyword", "value": keyword} for keyword in sorted(list(words)) if keyword not in existing_tag_values]
 
         # Return strategic tags first, followed by content keywords.
         return strategic_tags + keyword_tags
@@ -375,7 +403,7 @@ class NoesisTriad:
             packet_id=f"bp-{uuid.uuid4()}",
             primary_intent=intents["primary_intent"],
             latent_intent=intents["latent_intent"],
-            tags=self.strategic_heuristics.generate_tags(context), # Use full context for tags
+            tags=[{"type": t["type"], "value": t["value"]} for t in self.strategic_heuristics.generate_tags(context)], # Use full context for tags
             constraints=landscape["constraints"],
             fallacies=cognitive_fallacy_library.check_for_fallacies(aligned_prompt),
             expected_outcome=landscape["expected_outcome"],
@@ -388,6 +416,7 @@ class NoesisTriad:
             ambiguity_analysis=landscape["ambiguity_analysis"],
             persona="The_Architect", # Defaulting to The_Architect for now
             user_id=user_id,
+            external_data=context.get("external_data"),
         )
 
         # Run the final integrity check on the assembled blueprint.

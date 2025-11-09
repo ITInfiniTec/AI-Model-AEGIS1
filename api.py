@@ -8,11 +8,6 @@ from api_models import ProcessRequest
 
 app = Flask(__name__)
 
-# Instantiate the AEGIS Core engine once, when the application starts.
-# In a production environment, the AEGIS_Core would be stateless,
-# connecting to a StateManager for all data persistence.
-aegis_engine = AEGIS_Core()
-
 @app.route('/process', methods=['POST'])
 def process_prompt():
     """
@@ -34,15 +29,29 @@ def process_prompt():
             values=request_data.user_profile_data.values.model_dump()
         )
         user_profile.passions = request_data.user_profile_data.passions
+        
+        # 3. Instantiate AEGIS Core for this specific request/user session.
+        # This is the correct pattern for a stateless API endpoint.
+        aegis_engine = AEGIS_Core(user_id=request_data.user_id, user_profile=user_profile)
 
-        # 3. Process the prompt through the AEGIS Core
-        results = aegis_engine.process_prompt(request_data.user_id, request_data.prompt, user_profile)
+        # 4. Process the prompt through the AEGIS Core
+        results = aegis_engine.process_prompt(request_data.prompt)
 
-        # 4. Return a structured, production-ready response
+        # 5. Select key audit results to include in the response for transparency.
+        all_audits = results.get("wgpmhi_results", {})
+        audit_summary = {
+            "system_stability": all_audits.get("system_stability", "N/A"),
+            "ethical_compass": all_audits.get("ethical_compass", "N/A"),
+            "hallucination_ratio": all_audits.get("hallucination_ratio", "N/A"),
+            "risk_adjusted_planning": all_audits.get("risk_adjusted_planning", "N/A"),
+        }
+
+        # 6. Return a structured, production-ready response
         return jsonify({
             "status": "success",
-            "packet_id": results["cognitive_packet"].packet_id,
-            "response": results["final_output"]
+            "packet_id": results["cognitive_packet"].get("packet_id"),
+            "response": results["final_output"],
+            "audit_summary": audit_summary
         })
 
     except Exception as e:
