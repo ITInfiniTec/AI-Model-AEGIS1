@@ -1,11 +1,11 @@
-```language /main.py
+
 # main.py
 
 import json
+import sys
 from datetime import datetime
 from data_structures import UserProfile
 from aegis_core import AEGIS_Core, CognitivePacket, MemoryNode
-
 def main():
     """Initializes the AEGIS Core and runs a continuous interaction loop."""
     print("="*80)
@@ -21,121 +21,24 @@ def main():
     )
     user_profile.passions = ["chess", "poker", "technology", "war tactics"]
     
-    aegis_engine = AEGIS_Core()
+    # --- Command Handler Setup ---
+    # This decouples the command logic from the main loop.
+    aegis_engine = AEGIS_Core(user_id, user_profile)
+    command_handler = CommandHandler(aegis_engine)
 
     while True:
         print("\n" + "-"*80)
         prompt = input("PROMPT> ")
+        command_parts = prompt.lower().split()
+        command_name = command_parts[0]
+        args = command_parts[1:]
 
-        if prompt.lower() in ["exit", "quit"]:
-            print("Terminating session. AEGIS Core shutting down.")
-            break
-        elif prompt.lower() == "view_memory":
-            print("\n--- LONG-TERM MEMORY (USER: user123) ---")
-            memory = aegis_engine.noesis_triad.context_synthesizer.long_term_memory.get(user_id, [])
-            if not memory:
-                print("No memories found.")
-            else:
-                for i, node in enumerate(memory):
-                    print(f"  Memory Node {i+1}:")
-                    print(f"    - Node ID: {node.id}")
-                    print(f"    - Timestamp: {node.timestamp}")
-                    print(f"    - Performance Score: {node.performance_score}")
-                    # Accessing the packet reference to get the original prompt
-                    print(f"    - Prompt: '{node.packet_reference.intent['raw_prompt'][:70]}...'")
-            continue
-        elif prompt.lower() == "clear_memory":
-            if user_id in aegis_engine.noesis_triad.context_synthesizer.long_term_memory:
-                aegis_engine.noesis_triad.context_synthesizer.long_term_memory[user_id].clear()
-                print("Long-term memory for the current session has been cleared.")
-            else:
-                print("No memory found for the current session to clear.")
-            continue
-        elif prompt.lower().startswith("view_node "):
-            parts = prompt.split()
-            if len(parts) < 2:
-                print("Usage: view_node <node_id>")
-                continue
-            
-            node_id_to_find = parts[1]
-            memory = aegis_engine.noesis_triad.context_synthesizer.long_term_memory.get(user_id, [])
-            found_node = None
-            for node in memory:
-                if node.id == node_id_to_find:
-                    found_node = node
-                    break
-            
-            if found_node:
-                print(f"\n--- DETAILS FOR MEMORY NODE: {node_id_to_find} ---")
-                print(found_node.packet_reference.__dict__)
-            else:
-                print(f"Memory Node with ID '{node_id_to_find}' not found in the current session.")
-            continue
-        elif prompt.lower() == "save_memory":
-            memory_to_save = aegis_engine.noesis_triad.context_synthesizer.long_term_memory
-            if not memory_to_save.get(user_id):
-                print("No memory to save for the current session.")
-                continue
-
-            # Custom serializer to handle datetime and other custom objects
-            def default_serializer(o):
-                if isinstance(o, datetime):
-                    return o.isoformat()
-                if hasattr(o, '__dict__'):
-                    return o.__dict__
-                raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
-
-            with open('memory_log.json', 'w') as f:
-                json.dump(memory_to_save, f, default=default_serializer, indent=4)
-            print(f"Successfully saved long-term memory to 'memory_log.json'.")
-            continue
-        elif prompt.lower() == "load_memory":
-            try:
-                with open('memory_log.json', 'r') as f:
-                    loaded_memory_raw = json.load(f)
-                
-                reconstructed_memory = {}
-                for user, nodes_raw in loaded_memory_raw.items():
-                    reconstructed_nodes = []
-                    for node_dict in nodes_raw:
-                        # Reconstruct the CognitivePacket first
-                        cp_dict = node_dict['packet_reference']
-                        reconstructed_packet = CognitivePacket(
-                            packet_id=cp_dict['packet_id'],
-                            scenario=cp_dict['scenario'],
-                            intent=cp_dict['intent'],
-                            ethical_considerations=cp_dict['ethical_considerations'],
-                            ideal_response=cp_dict['ideal_response'],
-                            wgpmhi_results=cp_dict['wgpmhi_results'],
-                            debug_report=cp_dict['debug_report']
-                        )
-                        # Reconstruct the MemoryNode
-                        reconstructed_node = MemoryNode(
-                            node_id=node_dict['id'],
-                            timestamp=datetime.fromisoformat(node_dict['timestamp']),
-                            core_intent_vector=node_dict['core_intent_vector'],
-                            keywords=node_dict['keywords'],
-                            performance_score=node_dict['performance_score'],
-                            packet_reference=reconstructed_packet
-                        )
-                        reconstructed_nodes.append(reconstructed_node)
-                    reconstructed_memory[user] = reconstructed_nodes
-                aegis_engine.noesis_triad.context_synthesizer.long_term_memory = reconstructed_memory
-                print("Successfully loaded long-term memory from 'memory_log.json'.")
-            except FileNotFoundError:
-                print("Error: 'memory_log.json' not found.")
-            except Exception as e:
-                print(f"An error occurred while loading memory: {e}")
-            continue
-        elif prompt.lower() == "view_config":
-            print("\n--- CURRENT AEGIS CORE CONFIGURATION ---")
-            config = config_loader.get_full_config()
-            # Use the existing serializer to handle potential non-serializable objects
-            print(json.dumps(config, indent=4))
+        if command_handler.is_command(command_name):
+            command_handler.execute(command_name, *args)
             continue
 
         # Process the prompt through the entire AEGIS lifecycle
-        results = aegis_engine.process_prompt(user_id, prompt, user_profile)
+        results = aegis_engine.process_prompt(prompt)
 
         # --- Output Display ---
         print("\n" + "="*25 + " FINAL ORCHESTRATED OUTPUT " + "="*25)
@@ -150,6 +53,95 @@ def main():
         print(results["orthrus_debug_report"])
         print("-" * 80)
 
+
+class CommandHandler:
+    """Handles the registration and execution of CLI commands."""
+    def __init__(self, aegis_engine):
+        self.aegis_engine = aegis_engine
+        self._commands = {
+            "exit": self.exit_session,
+            "quit": self.exit_session,
+            "view_memory": self.view_memory,
+            "clear_memory": self.clear_memory,
+            "view_node": self.view_node,
+            "save_memory": self.save_memory,
+            "load_memory": self.load_memory,
+            "view_config": self.view_config,
+        }
+
+    def is_command(self, name):
+        return name in self._commands
+
+    def execute(self, name, *args):
+        """Executes a registered command."""
+        try:
+            self._commands[name](*args)
+        except TypeError:
+            print(f"Error: Invalid arguments for command '{name}'.")
+        except Exception as e:
+            print(f"An error occurred executing command '{name}': {e}")
+
+    def exit_session(self):
+        """Terminates the AEGIS Core session."""
+        print("Terminating session. AEGIS Core shutting down.")
+        sys.exit(0)
+
+    def view_memory(self):
+        """Displays a summary of the long-term memory."""
+        print(f"\n--- LONG-TERM MEMORY (USER: {self.aegis_engine.user_id}) ---")
+        memory = self.aegis_engine.get_memory()
+        if not memory:
+            print("No memories found.")
+        else:
+            for i, node in enumerate(memory):
+                print(f"  Memory Node {i+1}:")
+                print(f"    - Node ID: {node.id}")
+                print(f"    - Timestamp: {node.timestamp.isoformat()}")
+                print(f"    - Performance Score: {node.performance_score}")
+                print(f"    - Prompt: '{node.packet_reference.intent['raw_prompt'][:70]}...'")
+
+    def clear_memory(self):
+        """Clears the long-term memory for the current session."""
+        self.aegis_engine.clear_memory()
+        print("Long-term memory for the current session has been cleared.")
+
+    def view_node(self, node_id=None):
+        """Displays the full details of a specific memory node."""
+        if not node_id:
+            print("Usage: view_node <node_id>")
+            return
+        
+        node = self.aegis_engine.get_memory_node(node_id)
+        if node:
+            print(f"\n--- DETAILS FOR MEMORY NODE: {node_id} ---")
+            # A more readable representation would be ideal here.
+            print(json.dumps(node.to_dict(), indent=4))
+        else:
+            print(f"Memory Node with ID '{node_id}' not found in the current session.")
+
+    def save_memory(self):
+        """Saves the current session's memory to a file."""
+        try:
+            self.aegis_engine.save_memory_to_file('memory_log.json')
+            print("Successfully saved long-term memory to 'memory_log.json'.")
+        except Exception as e:
+            print(f"An error occurred while saving memory: {e}")
+
+    def load_memory(self):
+        """Loads a session's memory from a file."""
+        try:
+            self.aegis_engine.load_memory_from_file('memory_log.json')
+            print("Successfully loaded long-term memory from 'memory_log.json'.")
+        except FileNotFoundError:
+            print("Error: 'memory_log.json' not found.")
+        except Exception as e:
+            print(f"An error occurred while loading memory: {e}")
+
+    def view_config(self):
+        """Displays the current system configuration."""
+        print("\n--- CURRENT AEGIS CORE CONFIGURATION ---")
+        config = self.aegis_engine.get_config()
+        print(json.dumps(config, indent=4))
+
 if __name__ == "__main__":
     main()
-```

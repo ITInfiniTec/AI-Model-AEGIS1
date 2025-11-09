@@ -1,22 +1,25 @@
 # aegis_core.py
 
 from noesis_triad import noesis_triad
-from praxis_triad import praxis_triad
+from praxis_triad import PraxisTriad
 from wgpmhi import wgpmhi
-from data_structures import UserProfile
+from data_structures import UserProfile, MemoryNode
 from cognitive_packet_generator import cognitive_packet_generator
 from isp_protocol import isp
 from prometheus_iop import prometheus_iop
+import json
 
 class AEGIS_Core:
     """
     The core abstraction layer for the AEGIS engine. Encapsulates the entire
     cognitive pipeline into a single, manageable component.
     """
-    def __init__(self):
+    def __init__(self, user_id: str, user_profile: UserProfile):
         # Instantiate all core components of the AEGIS architecture.
-        self.noesis_triad = noesis_triad
-        self.praxis_triad = praxis_triad
+        self.user_id = user_id
+        self.user_profile = user_profile
+        self.noesis_triad = noesis_triad # This is a singleton instance
+        self.praxis_triad = PraxisTriad() # Instantiate PraxisTriad
         self.wgpmhi = wgpmhi
         self.cognitive_packet_generator = cognitive_packet_generator
         self.isp = isp
@@ -27,20 +30,20 @@ class AEGIS_Core:
         Processes a user prompt through the entire AEGIS lifecycle and returns
         a dictionary containing all generated artifacts.
         """
-        # Store the provided user profile.
-        self.noesis_triad.context_synthesizer.user_profiles[user_id] = user_profile
+        # Ensure the current user profile is available to the Noesis Triad.
+        self.noesis_triad.context_synthesizer.user_profiles[self.user_id] = self.user_profile
 
         # Generate a blueprint using the Noesis Triad
-        blueprint = self.noesis_triad.generate_blueprint(user_id, prompt)
+        blueprint = self.noesis_triad.generate_blueprint(self.user_id, prompt)
 
         # Generate an output using the Praxis Triad
-        generation_result = self.praxis_triad.generate_output(blueprint, user_profile)
+        generation_result = self.praxis_triad.generate_output(blueprint, self.user_profile, self.noesis_triad, self.wgpmhi)
         output = generation_result["output"]
         debug_report = generation_result["debug_report"]
 
         # Run the WGPMHI tests to get the results needed for the Cognitive Packet.
         # Pass None for packet initially as it hasn't been generated yet.
-        wgpmhi_results = self.wgpmhi.run_tests(user_profile, blueprint, output, self.noesis_triad, None)
+        wgpmhi_results = self.wgpmhi.run_tests(self.user_profile, blueprint, output, self.noesis_triad, None)
 
         # Generate a Cognitive Packet for training.
         cognitive_packet = self.cognitive_packet_generator.generate_packet(blueprint, output, wgpmhi_results, debug_report)
@@ -65,3 +68,39 @@ class AEGIS_Core:
             "isp_audit_response": isp_response,
             "prometheus_queue_status": prometheus_queue_status,
         }
+
+    # --- Command Handler Methods ---
+    def get_memory(self):
+        """Retrieves memory for the current user."""
+        return self.noesis_triad.context_synthesizer.long_term_memory.get(self.user_id, [])
+
+    def get_memory_node(self, node_id: str) -> MemoryNode | None:
+        """Retrieves a specific memory node for the current user."""
+        for node in self.get_memory():
+            if node.id == node_id:
+                return node
+        return None
+
+    def clear_memory(self):
+        """Clears memory for the current user."""
+        if self.user_id in self.noesis_triad.context_synthesizer.long_term_memory:
+            self.noesis_triad.context_synthesizer.long_term_memory[self.user_id].clear()
+
+    def save_memory_to_file(self, filepath: str):
+        """Saves the current user's memory to a JSON file."""
+        memory_to_save = {self.user_id: self.get_memory()}
+        with open(filepath, 'w') as f:
+            json.dump(memory_to_save, f, default=lambda o: o.dict() if hasattr(o, 'dict') else str(o), indent=4)
+
+    def load_memory_from_file(self, filepath: str):
+        """Loads memory for the current user from a JSON file."""
+        with open(filepath, 'r') as f:
+            loaded_memory_raw = json.load(f)
+        
+        user_memory = loaded_memory_raw.get(self.user_id, [])
+        self.noesis_triad.context_synthesizer.long_term_memory[self.user_id] = [MemoryNode.parse_obj(node_dict) for node_dict in user_memory]
+
+    def get_config(self):
+        """Retrieves the full system configuration."""
+        from config_loader import config_loader
+        return config_loader.get_full_config()

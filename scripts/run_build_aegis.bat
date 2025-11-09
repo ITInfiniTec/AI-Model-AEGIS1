@@ -1,0 +1,1 @@
+"C:\Users\User\AppData\Local\Programs\Python\Python313\Scripts\pyinstaller.exe" scripts/main_aegis.spec --noconfirm

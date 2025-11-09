@@ -1,10 +1,11 @@
 ```python
 # praxis_triad.py
 
-from typing import List, Dict
+import re
+from typing import List, Dict, Any
 from data_structures import Blueprint
 from cmep import cmep
-from cognitive_fallacy_library import cognitive_fallacy_library, CognitiveFallacyLibrary
+from cognitive_fallacy_library import cognitive_fallacy_library
 from diagnostic_reporter import DiagnosticReporter
 from prometheus_iop import prometheus_iop
 
@@ -121,7 +122,7 @@ class TaskDecompositionEngine:
         # Simulate the "Vector Cryptographic QVC (unfolding execution)"
         execution_string = f"""
 -- BEGIN QVC UNFOLDING EXECUTION --
-INTENT_HASH: {hash(intent)}
+INTENT_HASH: {hash(intent)} # In a real system, this would be a cryptographic hash.
 CONSTRAINTS: [{constraints_str}]
 TARGET_FORMAT: {format_constraint}
 TARGET_AUDIENCE: {audience_constraint}{fallacy_warnings}
@@ -137,7 +138,7 @@ SEQUENTIAL_TASK_GRAPH:
 """
         return execution_string.strip()
 
-    def compile_blueprint(self, blueprint: Blueprint) -> str:
+    def compile_blueprint(self, blueprint: Blueprint, primary_intent: str, tags: List[Dict[str, str]], latent_intent: str, constraints: List[str]) -> str:
         """Compiles the blueprint into an executable output."""
         # Enforce ethical considerations (from Conceptual Audit in NoesisTriad)
         if "violation detected" in blueprint.ethical_considerations:
@@ -147,10 +148,10 @@ SEQUENTIAL_TASK_GRAPH:
         detected_fallacies = cognitive_fallacy_library.check_for_fallacies(blueprint.primary_intent)
 
         # Tier 2: Tag-to-Operation Translation
-        operations = self._translate_tags_to_operations(blueprint.tags, blueprint.latent_intent)
+        operations = self._translate_tags_to_operations(tags, latent_intent)
 
         # Tier 3: Operation-to-Execution Translation (pass full blueprint for tag access)
-        execution_plan = self._translate_operations_to_execution(blueprint.primary_intent, operations, blueprint.constraints, detected_fallacies, blueprint)
+        execution_plan = self._translate_operations_to_execution(primary_intent, operations, constraints, detected_fallacies)
 
         # The compiler's sole job is to produce the execution plan.
         return execution_plan
@@ -240,12 +241,9 @@ class PraxisTriad:
         self.response_orchestrator = ResponseOrchestrator()
         self.persona_interface = PersonaInterface()
 
-    def generate_output(self, blueprint: Blueprint, user_profile: UserProfile) -> Dict[str, Any]:
+    def generate_output(self, blueprint: Blueprint, user_profile: UserProfile, noesis_triad, wgpmhi) -> Dict[str, Any]:
         """Generates an output based on the given blueprint."""
         reporter = DiagnosticReporter()
-        from typing import Any
-        from wgpmhi import wgpmhi # Local import to avoid circular dependency at module level
-        from noesis_triad import noesis_triad # Local import for refinement
 
         # Check for ANVIL warnings from the initial blueprint generation.
         for constraint in blueprint.constraints:
@@ -256,8 +254,8 @@ class PraxisTriad:
         execution_plan = self.universal_compiler._translate_operations_to_execution(
             blueprint.primary_intent,
             self.universal_compiler._translate_tags_to_operations(blueprint.tags, blueprint.latent_intent),
-            blueprint.constraints, blueprint.primary_intent, blueprint
-            cognitive_fallacy_library.check_for_fallacies(blueprint.primary_intent)
+            blueprint.constraints,
+            cognitive_fallacy_library.check_for_fallacies(blueprint.primary_intent),
         )
 
         # Run the pre-compilation audit.
@@ -273,7 +271,13 @@ class PraxisTriad:
         # --- QUASAR-LOOP END ---
 
         # Final compilation and output generation using the (potentially corrected) blueprint.
-        execution_plan = self.universal_compiler.compile_blueprint(blueprint)
+        execution_plan = self.universal_compiler.compile_blueprint(
+            blueprint,
+            blueprint.primary_intent,
+            blueprint.tags,
+            blueprint.latent_intent,
+            blueprint.constraints
+        )
         final_compiled_output = self.response_orchestrator.orchestrate_response(execution_plan, blueprint, user_profile)
         audited_output = cmep.post_generation_audit(blueprint.primary_intent, final_compiled_output)
         final_output = self.persona_interface.apply_persona(audited_output, blueprint.persona)
