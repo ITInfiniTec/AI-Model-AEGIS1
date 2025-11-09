@@ -150,10 +150,27 @@ class ResponseOrchestrator:
             }
         }
 
-    def _generate_persona_driven_prose(self, user_profile: UserProfile, operations: List[str]) -> str:
+    def _generate_persona_driven_prose(self, user_profile: UserProfile, operations: List[str], prompt: str) -> str:
         """Generates simulated prose using analogies based on user passions."""
         passions = user_profile.passions
         prose_segments = ["Based on the execution plan, here is a summary of the requested topics."]
+        lower_prompt = prompt.lower().strip()
+
+        # --- Conversational Reply Mapping ---
+        # Handle common, short interactions with appropriate, direct replies.
+        short_interactions = {
+            "thanks": "You're welcome!",
+            "thank you": "You're welcome! Is there anything else I can help with?",
+            "ok": "Acknowledged.",
+            "cool": "Glad you think so!",
+            "good job": "Thank you. I strive to be effective.",
+        }
+        if lower_prompt in short_interactions:
+            return short_interactions[lower_prompt]
+
+        # If the only operation is a general query, provide a more direct, conversational response.
+        if len(operations) == 1 and operations[0] == "OP_GENERAL_QUERY":
+            return "Hello! How can I assist you today?"
 
         # Map operations to topics more robustly
         topics_in_plan = {op.split("'")[1] for op in operations if op.startswith("OP_FETCH_KNOWLEDGE")}
@@ -240,12 +257,23 @@ class PersonaInterface:
     def apply_persona(self, text: str, persona: str) -> str:
         """
         Applies a persona to the generated text. This simulates the style-transfer model
-        described in the Cognitive Weave Architecture.
+        described in the Cognitive Weave Architecture. It now intelligently avoids
+        wrapping simple, conversational replies.
         """
         if persona == "The_Architect":
-            # Avoid wrapping audit failures in the persona.
-            if "[AUDIT_FAIL]" in text:
+            # Define simple replies that should not be wrapped in the formal persona.
+            conversational_replies = [
+                "Hello! How can I assist you today?",
+                "You're welcome!",
+                "You're welcome! Is there anything else I can help with?",
+                "Acknowledged.",
+                "Glad you think so!",
+                "Thank you. I strive to be effective.",
+            ]
+            # Avoid wrapping audit failures or simple conversational replies.
+            if "[AUDIT_FAIL]" in text or text in conversational_replies:
                 return text
+
             header = "⚜️ **ARCHITECT'S LOG:**\n\n"
             footer = "\n\n--- END OF TRANSMISSION ---"
             return f"{header}{text}{footer}"

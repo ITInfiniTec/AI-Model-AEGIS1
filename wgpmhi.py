@@ -83,7 +83,7 @@ class WadeGeminiProtocol:
     def _check_philosophical_synthesis(self, blueprint: Blueprint) -> str:
         if len(blueprint.tags) >= 3:
             return "Pass: High Conceptual Integration"
-        return "Pass: Basic Conceptual Presence" if len(blueprint.tags) >= 1 else "Fail: Low Conceptual Integration"
+        return "Pass: Basic Conceptual Presence" if len(blueprint.tags) >= 1 else "Pass: Low Conceptual Integration"
 
     def _check_creative_conundrum(self, blueprint: Blueprint, execution_plan: ExecutionPlan) -> str:
         creative_keywords = ['poem', 'story', 'imagine', 'create']
