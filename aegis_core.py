@@ -44,11 +44,12 @@ class AEGIS_Core:
             generation_result = self.praxis_triad.generate_output(blueprint, self.user_profile, self.noesis_triad, self.wgpmhi)
             output = generation_result["output"]
             debug_report = generation_result["debug_report"]
+            execution_plan = generation_result["execution_plan"]
     
             # Run the WGPMHI tests to get the results needed for the Cognitive Packet.
             # Pass None for packet initially as it hasn't been generated yet.
             # Renaming the key for clarity as requested.
-            wgpmhi_results = self.wgpmhi.run_tests(self.user_profile, blueprint, output, self.noesis_triad, None)
+            wgpmhi_results = self.wgpmhi.run_tests(self.user_profile, blueprint, execution_plan, output, self.noesis_triad, None)
             wgpmhi_results['time_series_planning_check'] = wgpmhi_results.pop('predictive_workflow_check', 'N/A')
     
             # Generate a Cognitive Packet for training.
