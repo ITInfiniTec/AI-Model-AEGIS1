@@ -60,8 +60,8 @@ class AEGIS_Core:
     
             # --- Project PROMETHEUS: Final Output and External Audit ---
             # 1. Simulate external audit via ISP (existing Project PANDORA)
-            external_request = {"packet_id": cognitive_packet.packet_id}
-            isp_response = self.isp.handle_external_audit_request(external_request)
+            external_request = {"packet_id": cognitive_packet.packet_id} # type: ignore
+            isp_response = self.isp.handle_external_audit_request(external_request, self.noesis_triad)
     
             # 2. Simulate sending the Cognitive Packet to the Prometheus monitoring system (NEW)
             prometheus_queue_status = self.prometheus_iop.send_cognitive_packet(cognitive_packet)
