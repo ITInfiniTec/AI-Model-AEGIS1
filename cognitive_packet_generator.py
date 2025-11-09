@@ -2,6 +2,7 @@
 
 import uuid
 from typing import Dict, Any
+from datetime import datetime
 from data_structures import CognitivePacket, Blueprint
 
 class CognitivePacketGenerator:
@@ -13,31 +14,20 @@ class CognitivePacketGenerator:
         Assembles a CognitivePacket from the results of a single interaction,
         simulating the data generation process for training Prometheus agents.
         """
-        packet_id = f"cp-{uuid.uuid4()}"
-        scenario = f"User prompt was: '{blueprint.primary_intent}'. The system's latent intent was to: '{blueprint.latent_intent}'."
-
-        # This simulates the ideal reasoning. In a real training scenario, this might be human-verified or refined.
-        reasoning = f"The system identified the primary intent, inferred the latent intent, and generated a plan. WGPMHI audit results: {wgpmhi_results.get('self_correction_audit', 'N/A')}"
+        # Extract a summary of the final output, excluding the detailed execution plan.
+        output_summary = final_output.split("--- SIMULATED PROSE OUTPUT ---")[-1].strip()
 
         packet = CognitivePacket(
-            packet_id=packet_id,
-            scenario=scenario,
+            packet_id=f"cp-{uuid.uuid4()}",
+            timestamp=datetime.now(),
             intent={
-                "raw_prompt": blueprint.primary_intent,
-                "inferred_goal": blueprint.latent_intent,
-                "math_language_tags": [tag['value'] for tag in blueprint.tags],
+                "primary": blueprint.primary_intent,
+                "latent": blueprint.latent_intent,
             },
-            ethical_considerations={
-                "potential_dilemmas": [blueprint.ethical_considerations],
-                "cmep_alignment": "Response was generated under CMEP guidelines, checking for red-lines and user-value alignment."
-            },
-            ideal_response={
-                "persona": "The_Architect", # This could be dynamic in a more advanced implementation
-                "content": final_output,
-                "reasoning": reasoning,
-            },
+            output_summary=output_summary,
             wgpmhi_results=wgpmhi_results,
-            debug_report=debug_report,
+            # The debug report is a dictionary; we'll serialize it to a string for the packet.
+            debug_report=str(debug_report),
         )
         return packet
 

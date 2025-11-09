@@ -335,12 +335,19 @@ class NoesisTriad:
 
         # S³ — Systematize for Scalability (Formulate the Response Plan)
         blueprint = Blueprint(
+            packet_id=f"bp-{uuid.uuid4()}",
             primary_intent=intents["primary_intent"],
             latent_intent=intents["latent_intent"],
             tags=self.strategic_heuristics.generate_tags(context), # Use full context for tags
             constraints=landscape["constraints"],
+            fallacies=cognitive_fallacy_library.check_for_fallacies(aligned_prompt),
             expected_outcome=landscape["expected_outcome"],
             ethical_considerations=ethical_considerations,
+            # Scores from Project ORION
+            risk_score=context_evaluation.get("risk_score", 0.0),
+            # Confidence is inversely related to novelty.
+            confidence_score=1.0 - context_evaluation.get("novelty_score", 0.0),
+            novelty_score=context_evaluation.get("novelty_score", 0.0),
             ambiguity_analysis=landscape["ambiguity_analysis"],
             persona="The_Architect", # Defaulting to The_Architect for now
             user_id=user_id,

@@ -43,7 +43,9 @@ class AEGIS_Core:
 
         # Run the WGPMHI tests to get the results needed for the Cognitive Packet.
         # Pass None for packet initially as it hasn't been generated yet.
+        # Renaming the key for clarity as requested.
         wgpmhi_results = self.wgpmhi.run_tests(self.user_profile, blueprint, output, self.noesis_triad, None)
+        wgpmhi_results['time_series_planning_check'] = wgpmhi_results.pop('predictive_workflow_check', 'N/A')
 
         # Generate a Cognitive Packet for training.
         cognitive_packet = self.cognitive_packet_generator.generate_packet(blueprint, output, wgpmhi_results, debug_report)
@@ -61,10 +63,10 @@ class AEGIS_Core:
         # Return all generated artifacts in a structured dictionary.
         return {
             "final_output": output,
-            "blueprint": blueprint,
+            "blueprint": blueprint.model_dump(),
             "wgpmhi_results": wgpmhi_results,
-            "orthrus_debug_report": debug_report,
-            "cognitive_packet": cognitive_packet,
+            "orthrus_debug_report": str(debug_report),
+            "cognitive_packet": cognitive_packet.model_dump(mode='json'),
             "isp_audit_response": isp_response,
             "prometheus_queue_status": prometheus_queue_status,
         }

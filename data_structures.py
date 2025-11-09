@@ -7,12 +7,11 @@ from pydantic import BaseModel, Field
 class CognitivePacket(BaseModel):
     """Represents the complete data snapshot of a single cognitive cycle."""
     packet_id: str
-    scenario: str
+    timestamp: datetime
     intent: Dict[str, Any]
-    ethical_considerations: Dict[str, List[str]]
-    ideal_response: Dict[str, Any]
+    output_summary: str
     wgpmhi_results: Dict[str, Any]
-    debug_report: Dict[str, Any]
+    debug_report: str
 
 
 class MathLanguageTag(BaseModel):
@@ -21,12 +20,17 @@ class MathLanguageTag(BaseModel):
 
 class Blueprint(BaseModel):
     """The strategic plan formulated by the Noesis Triad."""
+    packet_id: str
     primary_intent: str
     latent_intent: str
     tags: List[MathLanguageTag]
     constraints: List[str]
+    fallacies: List[str]
     expected_outcome: str
     ethical_considerations: str
+    risk_score: float
+    confidence_score: float
+    novelty_score: float
     ambiguity_analysis: Dict[str, List[str]]
     persona: str
     user_id: str
