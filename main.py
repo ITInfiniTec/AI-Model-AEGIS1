@@ -4,8 +4,8 @@
 import json
 import sys
 from datetime import datetime
-from data_structures import UserProfile
-from aegis_core import AEGIS_Core, CognitivePacket, MemoryNode
+from data_structures import UserProfile, CognitivePacket, MemoryNode
+from aegis_core import AEGIS_Core
 def main():
     """Initializes the AEGIS Core and runs a continuous interaction loop."""
     print("="*80)
