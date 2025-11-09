@@ -37,6 +37,7 @@ class UniversalCompiler:
         
         # --- Project CHRONOS: New Tag Recognition ---
         if any(tag.get("type") == "MODEL_PROTOCOL" and tag.get("value") == "PREDICTIVE_MODEL: REQUIRED" for tag in tags):
+        if any(tag.type == "MODEL_PROTOCOL" and tag.value == "PREDICTIVE_MODEL: REQUIRED" for tag in tags):
             operations.append("OP_FETCH_TIME_SERIES_DATA")
             operations.append("OP_ANALYZE_SERIES(model='ARIMA_SIM')")
             operations.append("OP_GENERATE_FORECAST")
@@ -168,8 +169,10 @@ class ResponseOrchestrator:
 
         # Confidence Layer Integration (Project VESTA)
         confidence_tag = next((tag for tag in blueprint.tags if tag.get("type") == "CONTEXT_CONFIDENCE"), None)
+        confidence_tag = next((tag for tag in blueprint.tags if tag.type == "CONTEXT_CONFIDENCE"), None)
         confidence_statement = ""
         if confidence_tag and confidence_tag.get("value") == "LOW":
+        if confidence_tag and confidence_tag.value == "LOW":
             confidence_statement = "CONFIDENCE_NOTE: Context confidence is low. External verification is recommended.\n"
 
         # Audience Tone Modulation
