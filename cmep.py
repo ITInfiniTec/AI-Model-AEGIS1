@@ -1,4 +1,3 @@
-```python
 # cmep.py
 
 import re
@@ -56,4 +55,3 @@ class ChronoMaatEthicalProtocol:
 
 
 cmep = ChronoMaatEthicalProtocol()
-```

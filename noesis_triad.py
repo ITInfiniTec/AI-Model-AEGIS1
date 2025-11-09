@@ -1,4 +1,3 @@
-```python
 # noesis_triad.py
 
 import re
@@ -332,4 +331,3 @@ class NoesisTriad:
         return corrected_blueprint
 
 noesis_triad = NoesisTriad()
-```

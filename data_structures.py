@@ -47,7 +47,7 @@ class MemoryNode(BaseModel):
     packet_reference: CognitivePacket
 
     class Config:
-        allow_population_by_field_name = True
+        populate_by_name = True
 
 class TimeDataSeries(BaseModel):
     """

@@ -25,12 +25,12 @@ class AEGIS_Core:
         self.isp = isp
         self.prometheus_iop = prometheus_iop
 
-    def process_prompt(self, user_id: str, prompt: str, user_profile: UserProfile) -> dict:
+    def process_prompt(self, prompt: str) -> dict:
         """
         Processes a user prompt through the entire AEGIS lifecycle and returns
         a dictionary containing all generated artifacts.
         """
-        # Ensure the current user profile is available to the Noesis Triad.
+        # Ensure the current user's profile is available to the Noesis Triad.
         self.noesis_triad.context_synthesizer.user_profiles[self.user_id] = self.user_profile
 
         # Generate a blueprint using the Noesis Triad
@@ -49,7 +49,7 @@ class AEGIS_Core:
         cognitive_packet = self.cognitive_packet_generator.generate_packet(blueprint, output, wgpmhi_results, debug_report)
 
         # Store the Cognitive Packet in Long-Term Memory.
-        self.noesis_triad.context_synthesizer.update_long_term_memory(user_id, cognitive_packet)
+        self.noesis_triad.context_synthesizer.update_long_term_memory(self.user_id, cognitive_packet)
 
         # --- Project PROMETHEUS: Final Output and External Audit ---
         # 1. Simulate external audit via ISP (existing Project PANDORA)

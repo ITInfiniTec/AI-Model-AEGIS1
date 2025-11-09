@@ -1,4 +1,3 @@
-```python
 # praxis_triad.py
 
 import re
@@ -286,4 +285,3 @@ class PraxisTriad:
         return {"output": final_output, "debug_report": reporter.generate_report()}
 
 praxis_triad = PraxisTriad()
-```
