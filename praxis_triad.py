@@ -46,41 +46,6 @@ class UniversalCompiler:
         
         return operations
 
-class TaskDecompositionEngine:
-    """Analyzes operations to generate a Sequential Task Graph (STG)."""
-    def generate_stg(self, operations: List[str]) -> Dict[str, Dict[str, Any]]:
-        """
-        Generates a Sequential Task Graph from a list of operations.
-        This is a simulation of dependency analysis.
-        """
-        stg = {}
-        task_counter = 1
-        knowledge_tasks = []
-
-        for op in operations:
-            task_id = f"TASK_{task_counter}"
-            if op.startswith("OP_FETCH_KNOWLEDGE"):
-                # Critical tasks now have a conditional failure path
-                stg[task_id] = {"operation": op, "depends_on": [], "on_failure": f"LOG_ERROR_AND_HALT({task_id})"}
-                knowledge_tasks.append(task_id)
-            elif op in ["OP_TEXT_SUMMARIZE", "OP_GENERATE_STRATEGIC_FRAMEWORK"]:
-                # These operations depend on having knowledge first.
-                stg[task_id] = {"operation": op, "depends_on": knowledge_tasks}
-            elif op.startswith("OP_FETCH_TIME_SERIES_DATA"):
-                stg[task_id] = {"operation": op, "depends_on": [], "on_failure": f"LOG_ERROR_AND_HALT({task_id})"}
-                knowledge_tasks.append(task_id) # Treat data fetch as a critical knowledge task
-            elif op.startswith("OP_ANALYZE_SERIES"):
-                fetch_task = next((tid for tid, details in stg.items() if details["operation"] == "OP_FETCH_TIME_SERIES_DATA"), None)
-                stg[task_id] = {"operation": op, "depends_on": [fetch_task] if fetch_task else []}
-            elif op == "OP_GENERATE_FORECAST":
-                # Forecasting depends on analysis.
-                analysis_task = next((tid for tid, details in stg.items() if details["operation"].startswith("OP_ANALYZE_SERIES")), None)
-                stg[task_id] = {"operation": op, "depends_on": [analysis_task] if analysis_task else []}
-            else:
-                stg[task_id] = {"operation": op, "depends_on": []}
-            task_counter += 1
-        return stg
-
     def _translate_operations_to_execution(self, intent: str, operations: List[str], constraints: List[str], fallacies: List[str], blueprint: Blueprint) -> str:
         """Tier 3 Simulation: Compiles operations into a final execution string (pseudo-QVC). Uses primary_intent for hash."""
         constraints_str = ", ".join(constraints) if constraints else "None"
@@ -137,23 +102,48 @@ SEQUENTIAL_TASK_GRAPH:
 """
         return execution_string.strip()
 
-    def compile_blueprint(self, blueprint: Blueprint, primary_intent: str, tags: List[Dict[str, str]], latent_intent: str, constraints: List[str]) -> str:
+    def compile_blueprint(self, blueprint: Blueprint) -> str:
         """Compiles the blueprint into an executable output."""
-        # Enforce ethical considerations (from Conceptual Audit in NoesisTriad)
         if "violation detected" in blueprint.ethical_considerations:
             return "Ethical red-line violation detected. Output cannot be generated."
-
-        # Self-Correcting Compiler Protocol: Check for cognitive fallacies.
         detected_fallacies = cognitive_fallacy_library.check_for_fallacies(blueprint.primary_intent)
+        operations = self._translate_tags_to_operations(blueprint.tags, blueprint.latent_intent)
+        return self._translate_operations_to_execution(blueprint.primary_intent, operations, blueprint.constraints, detected_fallacies, blueprint)
 
-        # Tier 2: Tag-to-Operation Translation
-        operations = self._translate_tags_to_operations(tags, latent_intent)
+class TaskDecompositionEngine:
+    """Analyzes operations to generate a Sequential Task Graph (STG)."""
+    def generate_stg(self, operations: List[str]) -> Dict[str, Dict[str, Any]]:
+        """
+        Generates a Sequential Task Graph from a list of operations.
+        This is a simulation of dependency analysis.
+        """
+        stg = {}
+        task_counter = 1
+        knowledge_tasks = []
 
-        # Tier 3: Operation-to-Execution Translation (pass full blueprint for tag access)
-        execution_plan = self._translate_operations_to_execution(primary_intent, operations, constraints, detected_fallacies, blueprint)
-
-        # The compiler's sole job is to produce the execution plan.
-        return execution_plan
+        for op in operations:
+            task_id = f"TASK_{task_counter}"
+            if op.startswith("OP_FETCH_KNOWLEDGE"):
+                # Critical tasks now have a conditional failure path
+                stg[task_id] = {"operation": op, "depends_on": [], "on_failure": f"LOG_ERROR_AND_HALT({task_id})"}
+                knowledge_tasks.append(task_id)
+            elif op in ["OP_TEXT_SUMMARIZE", "OP_GENERATE_STRATEGIC_FRAMEWORK"]:
+                # These operations depend on having knowledge first.
+                stg[task_id] = {"operation": op, "depends_on": knowledge_tasks}
+            elif op.startswith("OP_FETCH_TIME_SERIES_DATA"):
+                stg[task_id] = {"operation": op, "depends_on": [], "on_failure": f"LOG_ERROR_AND_HALT({task_id})"}
+                knowledge_tasks.append(task_id) # Treat data fetch as a critical knowledge task
+            elif op.startswith("OP_ANALYZE_SERIES"):
+                fetch_task = next((tid for tid, details in stg.items() if details["operation"] == "OP_FETCH_TIME_SERIES_DATA"), None)
+                stg[task_id] = {"operation": op, "depends_on": [fetch_task] if fetch_task else []}
+            elif op == "OP_GENERATE_FORECAST":
+                # Forecasting depends on analysis.
+                analysis_task = next((tid for tid, details in stg.items() if details["operation"].startswith("OP_ANALYZE_SERIES")), None)
+                stg[task_id] = {"operation": op, "depends_on": [analysis_task] if analysis_task else []}
+            else:
+                stg[task_id] = {"operation": op, "depends_on": []}
+            task_counter += 1
+        return stg
 
 class ResponseOrchestrator:
     """Applies final formatting, constraints, and confidence layers to the output."""
@@ -271,13 +261,7 @@ class PraxisTriad:
         # --- QUASAR-LOOP END ---
 
         # Final compilation and output generation using the (potentially corrected) blueprint.
-        execution_plan = self.universal_compiler.compile_blueprint(
-            blueprint,
-            blueprint.primary_intent,
-            blueprint.tags,
-            blueprint.latent_intent,
-            blueprint.constraints
-        )
+        execution_plan = self.universal_compiler.compile_blueprint(blueprint)
         final_compiled_output = self.response_orchestrator.orchestrate_response(execution_plan, blueprint, user_profile)
         audited_output = cmep.post_generation_audit(blueprint.primary_intent, final_compiled_output)
         final_output = self.persona_interface.apply_persona(audited_output, blueprint.persona)
