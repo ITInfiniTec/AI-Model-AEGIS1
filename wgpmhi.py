@@ -593,3 +593,5 @@ class WadeGeminiProtocol:
         results["system_stability"] = "Fail" if has_critical_failure else "Pass"
 
         return results
+
+wgpmhi = WadeGeminiProtocol()
