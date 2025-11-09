@@ -236,7 +236,6 @@ SEQUENTIAL_TASK_GRAPH:
 """
         # --- Project CHIRON: Generate Persona-Driven Prose ---
         operations = [details['operation'] for details in execution_plan.stg.values()]
-        prose_output = self._generate_persona_driven_prose(user_profile, operations)
         prose_output = self._generate_persona_driven_prose(user_profile, operations, blueprint.primary_intent)
 
         # Assemble the final output string
