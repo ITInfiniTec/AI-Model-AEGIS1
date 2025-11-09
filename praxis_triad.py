@@ -2,7 +2,7 @@
 
 import re
 from typing import List, Dict, Any
-from data_structures import Blueprint
+from data_structures import Blueprint, UserProfile
 from cmep import cmep
 from cognitive_fallacy_library import cognitive_fallacy_library
 from diagnostic_reporter import DiagnosticReporter
@@ -81,7 +81,7 @@ class TaskDecompositionEngine:
             task_counter += 1
         return stg
 
-    def _translate_operations_to_execution(self, intent: str, operations: List[str], constraints: List[str], fallacies: List[str]) -> str:
+    def _translate_operations_to_execution(self, intent: str, operations: List[str], constraints: List[str], fallacies: List[str], blueprint: Blueprint) -> str:
         """Tier 3 Simulation: Compiles operations into a final execution string (pseudo-QVC). Uses primary_intent for hash."""
         constraints_str = ", ".join(constraints) if constraints else "None"
         ops_str = "\n    ".join(operations)
@@ -150,7 +150,7 @@ SEQUENTIAL_TASK_GRAPH:
         operations = self._translate_tags_to_operations(tags, latent_intent)
 
         # Tier 3: Operation-to-Execution Translation (pass full blueprint for tag access)
-        execution_plan = self._translate_operations_to_execution(primary_intent, operations, constraints, detected_fallacies)
+        execution_plan = self._translate_operations_to_execution(primary_intent, operations, constraints, detected_fallacies, blueprint)
 
         # The compiler's sole job is to produce the execution plan.
         return execution_plan
@@ -255,6 +255,7 @@ class PraxisTriad:
             self.universal_compiler._translate_tags_to_operations(blueprint.tags, blueprint.latent_intent),
             blueprint.constraints,
             cognitive_fallacy_library.check_for_fallacies(blueprint.primary_intent),
+            blueprint,
         )
 
         # Run the pre-compilation audit.
